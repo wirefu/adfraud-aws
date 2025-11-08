@@ -1,0 +1,24 @@
+{
+  "httpMethod": "GET",
+  "path": "/pt",
+  "queryStringParameters": {
+    "cid": "123456789",
+    "gclid": "CjwKCAjw_xyz123abc456",
+    "kw": "buy shoes online",
+    "aid": "987654321",
+    "target": "placement-123",
+    "mt": "search",
+    "device": "mobile",
+    "creative": "ad-456"
+  },
+  "headers": {
+    "User-Agent": "Mozilla/5.0 (compatible; Google-Ads-Tracking)",
+    "Accept": "*/*"
+  },
+  "requestContext": {
+    "requestId": "test-request-id",
+    "stage": "dev",
+    "requestTime": "2024-01-01T00:00:00Z"
+  }
+}
+

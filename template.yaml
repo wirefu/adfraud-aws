@@ -29,6 +29,12 @@ Resources:
           AttributeType: S
         - AttributeName: device_id
           AttributeType: S
+        - AttributeName: gclid
+          AttributeType: S
+        - AttributeName: keyword
+          AttributeType: S
+        - AttributeName: target_id
+          AttributeType: S
       KeySchema:
         - AttributeName: event_id
           KeyType: HASH
@@ -46,6 +52,30 @@ Resources:
         - IndexName: device-timestamp-index
           KeySchema:
             - AttributeName: device_id
+              KeyType: HASH
+            - AttributeName: timestamp
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+        - IndexName: gclid-timestamp-index
+          KeySchema:
+            - AttributeName: gclid
+              KeyType: HASH
+            - AttributeName: timestamp
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+        - IndexName: keyword-timestamp-index
+          KeySchema:
+            - AttributeName: keyword
+              KeyType: HASH
+            - AttributeName: timestamp
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+        - IndexName: target-timestamp-index
+          KeySchema:
+            - AttributeName: target_id
               KeyType: HASH
             - AttributeName: timestamp
               KeyType: RANGE
@@ -208,6 +238,34 @@ Resources:
           ML_WEIGHT: '0.4'
           AI_WEIGHT: '0.6'
           ENSEMBLE_METHOD: 'confidence_weighted'
+
+<<<<<<< HEAD
+  # Lambda: Google Ads Tracking Handler
+  GoogleAdsTrackingHandler:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${AWS::StackName}-google-ads-tracking'
+      CodeUri: src/google_ads_tracking/
+      Handler: app.lambda_handler
+      Description: Handle Google Ads parallel tracking requests with <1s response time
+      Timeout: 5
+      MemorySize: 1024
+      LoggingConfig:
+        LogGroup: !GetAtt GoogleAdsTrackingLogGroup.Arn
+      Environment:
+        Variables:
+          DYNAMODB_TABLE_NAME: !Ref EventsTable
+          ORCHESTRATOR_FUNCTION: !GetAtt FraudOrchestrator.Arn
+          FRAUD_THRESHOLD: '0.65'
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref EventsTable
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - lambda:InvokeFunction
+              Resource: !GetAtt FraudOrchestrator.Arn
 
   # Honeypot Lambda Function
   HoneypotFunction:
@@ -615,6 +673,41 @@ Resources:
       LogGroupName: !Sub '/ecs/${AWS::StackName}-dashboard'
       RetentionInDays: 7
 
+  # CloudWatch Log Group for Google Ads Tracking Handler
+  GoogleAdsTrackingLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${AWS::StackName}-google-ads-tracking'
+      RetentionInDays: 7
+
+  # CloudWatch Log Group for Ingestion Handler
+  IngestionHandlerLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${AWS::StackName}-ingestion-handler'
+      RetentionInDays: 7
+
+  # CloudWatch Log Group for Orchestrator
+  OrchestratorLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${AWS::StackName}-orchestrator'
+      RetentionInDays: 7
+
+  # CloudWatch Log Group for AI Analyzer
+  AIAnalyzerLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${AWS::StackName}-ai-analyzer'
+      RetentionInDays: 7
+
+  # CloudWatch Log Group for Decision Combiner
+  DecisionCombinerLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${AWS::StackName}-decision-combiner'
+      RetentionInDays: 7
+
   # ECS Service
   DashboardService:
     Type: AWS::ECS::Service
@@ -644,6 +737,407 @@ Resources:
         - Key: Name
           Value: !Sub '${AWS::StackName}-dashboard-service'
 
+  # SNS Topic for Alarms
+  PlatformOpsAlertsTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub '${AWS::StackName}-ops-alerts'
+      DisplayName: Platform Operations Alerts
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: FraudGuardAI
+
+  # SNS Email Subscription (conditional)
+  OpsAlertEmailSubscription:
+    Type: AWS::SNS::Subscription
+    Condition: HasOpsAlertEmail
+    Properties:
+      TopicArn: !Ref PlatformOpsAlertsTopic
+      Protocol: email
+      Endpoint: !Ref OpsAlertEmail
+
+  # API Gateway: REST API
+  PlatformAPI:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Name: !Sub '${AWS::StackName}-api'
+      Description: Platform API for fraud detection and Google Ads tracking
+      EndpointConfiguration:
+        Types:
+          - REGIONAL
+
+  # API Gateway: Resource for /v1
+  APIResourceV1:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref PlatformAPI
+      ParentId: !GetAtt PlatformAPI.RootResourceId
+      PathPart: v1
+
+  # API Gateway: Resource for /v1/detect-fraud
+  APIResourceDetectFraud:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref PlatformAPI
+      ParentId: !Ref APIResourceV1
+      PathPart: detect-fraud
+
+  # API Gateway: Resource for /pt
+  APIResourcePT:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref PlatformAPI
+      ParentId: !GetAtt PlatformAPI.RootResourceId
+      PathPart: pt
+
+  # API Gateway: Method for POST /v1/detect-fraud
+  APIMethodDetectFraud:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref PlatformAPI
+      ResourceId: !Ref APIResourceDetectFraud
+      HttpMethod: POST
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${IngestionHandler.Arn}/invocations'
+      MethodResponses:
+        - StatusCode: 200
+        - StatusCode: 400
+        - StatusCode: 500
+
+  # API Gateway: Method for GET /pt
+  APIMethodPT:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref PlatformAPI
+      ResourceId: !Ref APIResourcePT
+      HttpMethod: GET
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${GoogleAdsTrackingHandler.Arn}/invocations'
+      MethodResponses:
+        - StatusCode: 204
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: true
+        - StatusCode: 400
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: true
+        - StatusCode: 500
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: true
+
+  # API Gateway: OPTIONS Method for /pt (CORS preflight)
+  APIMethodPTOptions:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref PlatformAPI
+      ResourceId: !Ref APIResourcePT
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+              method.response.header.Access-Control-Allow-Methods: "'GET,OPTIONS'"
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key'"
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+      MethodResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Headers: true
+
+  # API Gateway: OPTIONS Method for /v1/detect-fraud (CORS preflight)
+  APIMethodDetectFraudOptions:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref PlatformAPI
+      ResourceId: !Ref APIResourceDetectFraud
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+              method.response.header.Access-Control-Allow-Methods: "'POST,OPTIONS'"
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key'"
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+      MethodResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Headers: true
+
+  # API Gateway: Deployment
+  APIDeployment:
+    Type: AWS::ApiGateway::Deployment
+    DependsOn:
+      - APIMethodDetectFraud
+      - APIMethodPT
+      - APIMethodPTOptions
+      - APIMethodDetectFraudOptions
+    Properties:
+      RestApiId: !Ref PlatformAPI
+      StageName: !Ref Environment
+
+  # API Gateway: Stage
+  APIStage:
+    Type: AWS::ApiGateway::Stage
+    Properties:
+      RestApiId: !Ref PlatformAPI
+      DeploymentId: !Ref APIDeployment
+      StageName: !Ref Environment
+      ThrottleSettings:
+        BurstLimit: 10000
+        RateLimit: 5000
+      MethodSettings:
+        - ResourcePath: '/*'
+          HttpMethod: '*'
+          LoggingLevel: INFO
+          DataTraceEnabled: true
+          MetricsEnabled: true
+      AccessLogSetting:
+        DestinationArn: !GetAtt APIAccessLogGroup.Arn
+        Format: '{"requestId":"$context.requestId","ip":"$context.identity.sourceIp","requestTime":"$context.requestTime","httpMethod":"$context.httpMethod","resourcePath":"$context.resourcePath","status":"$context.status","responseLength":"$context.responseLength"}'
+
+  # CloudWatch Log Group for API Gateway Access Logs
+  APIAccessLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/apigateway/${AWS::StackName}-api'
+      RetentionInDays: 7
+
+  # Lambda Permission for API Gateway - Ingestion Handler
+  IngestionHandlerAPIPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref IngestionHandler
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${PlatformAPI}/*/*'
+
+  # Lambda Permission for API Gateway - Google Ads Tracking Handler
+  GoogleAdsTrackingHandlerAPIPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref GoogleAdsTrackingHandler
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${PlatformAPI}/*/*'
+
+  # CloudWatch Alarm: Google Ads Endpoint Response Time
+  GoogleAdsResponseTimeAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${AWS::StackName}-google-ads-response-time'
+      AlarmDescription: Alert when Google Ads endpoint response time exceeds 900ms (approaching 1s timeout)
+      MetricName: Duration
+      Namespace: AWS/Lambda
+      Statistic: p95
+      Period: 60
+      EvaluationPeriods: 1
+      Threshold: 900000
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref GoogleAdsTrackingHandler
+      AlarmActions:
+        - !Ref PlatformOpsAlertsTopic
+      TreatMissingData: notBreaching
+
+  # CloudWatch Alarm: Google Ads Endpoint Timeout
+  GoogleAdsTimeoutAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${AWS::StackName}-google-ads-timeout'
+      AlarmDescription: Alert when Google Ads endpoint exceeds 1 second (Google will timeout)
+      MetricName: Duration
+      Namespace: AWS/Lambda
+      Statistic: Maximum
+      Period: 60
+      EvaluationPeriods: 1
+      Threshold: 1000000
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref GoogleAdsTrackingHandler
+      AlarmActions:
+        - !Ref PlatformOpsAlertsTopic
+      TreatMissingData: notBreaching
+
+  # CloudWatch Alarm: Google Ads Endpoint Error Rate
+  GoogleAdsErrorRateAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${AWS::StackName}-google-ads-error-rate'
+      AlarmDescription: Alert when Google Ads endpoint error rate exceeds 1%
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 10
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref GoogleAdsTrackingHandler
+      AlarmActions:
+        - !Ref PlatformOpsAlertsTopic
+      TreatMissingData: notBreaching
+
+  # CloudWatch Alarm: Lambda Throttling
+  LambdaThrottlingAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${AWS::StackName}-lambda-throttling'
+      AlarmDescription: Alert when any Lambda function is throttled
+      MetricName: Throttles
+      Namespace: AWS/Lambda
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref GoogleAdsTrackingHandler
+      AlarmActions:
+        - !Ref PlatformOpsAlertsTopic
+      TreatMissingData: notBreaching
+
+  # CloudWatch Alarm: DynamoDB Throttling
+  DynamoDBThrottlingAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${AWS::StackName}-dynamodb-throttling'
+      AlarmDescription: Alert when DynamoDB operations are throttled
+      MetricName: UserErrors
+      Namespace: AWS/DynamoDB
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: TableName
+          Value: !Ref EventsTable
+      AlarmActions:
+        - !Ref PlatformOpsAlertsTopic
+      TreatMissingData: notBreaching
+
+  # CloudWatch Alarm: No Traffic to /pt endpoint
+  GoogleAdsNoTrafficAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${AWS::StackName}-google-ads-no-traffic'
+      AlarmDescription: Alert when no requests to /pt endpoint for 5 minutes (system down or Google stopped sending)
+      MetricName: Invocations
+      Namespace: AWS/Lambda
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: LessThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref GoogleAdsTrackingHandler
+      AlarmActions:
+        - !Ref PlatformOpsAlertsTopic
+      TreatMissingData: breaching
+
+  # CloudWatch Alarm: Lambda Cost Spike
+  LambdaCostSpikeAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${AWS::StackName}-lambda-cost-spike'
+      AlarmDescription: Alert when Lambda invocations spike significantly (potential cost issue)
+      MetricName: Invocations
+      Namespace: AWS/Lambda
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 10000
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref GoogleAdsTrackingHandler
+      AlarmActions:
+        - !Ref PlatformOpsAlertsTopic
+      TreatMissingData: notBreaching
+
+  # CloudWatch Dashboard
+  GoogleAdsDashboard:
+    Type: AWS::CloudWatch::Dashboard
+    Properties:
+      DashboardName: !Sub '${AWS::StackName}-google-ads-dashboard'
+      DashboardBody: !Sub |
+        {
+          "widgets": [
+            {
+              "type": "metric",
+              "properties": {
+                "metrics": [
+                  ["AWS/Lambda", "Duration", {"stat": "p50", "label": "p50"}],
+                  ["AWS/Lambda", "Duration", {"stat": "p95", "label": "p95"}],
+                  ["AWS/Lambda", "Duration", {"stat": "p99", "label": "p99"}]
+                ],
+                "period": 60,
+                "stat": "Average",
+                "region": "${AWS::Region}",
+                "title": "Google Ads Endpoint Response Time",
+                "yAxis": {"left": {"label": "Milliseconds"}}
+              }
+            },
+            {
+              "type": "metric",
+              "properties": {
+                "metrics": [
+                  ["AWS/Lambda", "Invocations", {"stat": "Sum"}],
+                  ["AWS/Lambda", "Errors", {"stat": "Sum"}],
+                  ["AWS/Lambda", "Throttles", {"stat": "Sum"}]
+                ],
+                "period": 60,
+                "stat": "Sum",
+                "region": "${AWS::Region}",
+                "title": "Google Ads Endpoint Request Volume"
+              }
+            },
+            {
+              "type": "metric",
+              "properties": {
+                "metrics": [
+                  ["AWS/DynamoDB", "UserErrors", {"stat": "Sum"}]
+                ],
+                "period": 300,
+                "stat": "Sum",
+                "region": "${AWS::Region}",
+                "title": "DynamoDB Throttling Events"
+              }
+            }
+          ]
+        }
+
+  # Conditions
+  HasOpsAlertEmail:
+    Fn::Not:
+      - Fn::Equals:
+          - !Ref OpsAlertEmail
+          - ''
+
 Parameters:
   Environment:
     Type: String
@@ -653,6 +1147,11 @@ Parameters:
       - staging
       - prod
     Description: Deployment environment
+  
+  OpsAlertEmail:
+    Type: String
+    Default: ''
+    Description: Email address for CloudWatch alarm notifications (optional)
   
   VpcId:
     Type: String
@@ -717,6 +1216,24 @@ Outputs:
     Value: !Ref DashboardCluster
     Export:
       Name: !Sub '${AWS::StackName}-DashboardClusterName'
+
+  ApiUrl:
+    Description: API Gateway endpoint URL
+    Value: !Sub 'https://${PlatformAPI}.execute-api.${AWS::Region}.amazonaws.com/${Environment}'
+    Export:
+      Name: !Sub '${AWS::StackName}-ApiUrl'
+
+  ApiId:
+    Description: API Gateway ID
+    Value: !Ref PlatformAPI
+    Export:
+      Name: !Sub '${AWS::StackName}-ApiId'
+
+  PlatformOpsAlertsTopicArn:
+    Description: SNS Topic ARN for operations alerts
+    Value: !Ref PlatformOpsAlertsTopic
+    Export:
+      Name: !Sub '${AWS::StackName}-OpsAlertsTopicArn'
 
   HoneypotApiURL:
     Description: Honeypot API Gateway URL
