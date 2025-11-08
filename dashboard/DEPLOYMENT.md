@@ -123,7 +123,8 @@ App Runner service role needs:
       "Action": [
         "dynamodb:Scan",
         "dynamodb:Query",
-        "dynamodb:GetItem"
+        "dynamodb:GetItem",
+        "dynamodb:DescribeTable"
       ],
       "Resource": "arn:aws:dynamodb:us-east-1:*:table/fraudguard-events-*"
     },

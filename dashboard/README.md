@@ -111,6 +111,8 @@ A Streamlit-based web dashboard for monitoring real-time fraud metrics, campaign
 The App Runner service role needs:
 - `dynamodb:Scan` on events table
 - `dynamodb:Query` on events table
+- `dynamodb:GetItem` on events table
+- `dynamodb:DescribeTable` on events table
 - `s3:GetObject` on data bucket (optional)
 
 ## Features
