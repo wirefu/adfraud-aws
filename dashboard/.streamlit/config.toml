@@ -1,19 +1,13 @@
 [server]
 # App Runner compatibility settings
 enableXsrfProtection = true
-enableCORS = false
+enableCORS = true
 maxUploadSize = 200
 maxMessageSize = 200
+port = 8501
+address = "0.0.0.0"
+headless = true
 
 [browser]
 gatherUsageStats = false
-
-[server.port]
-port = 8501
-
-[server.address]
-address = "0.0.0.0"
-
-[server.headless]
-headless = true
 

@@ -8,6 +8,7 @@ import io
 import json
 import os
 import sys
+import time
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
@@ -38,6 +39,10 @@ LEGITIMATE_THRESHOLD = 0.3  # Allow immediately if ML score < 0.3
 BORDERLINE_MIN = 0.3  # Route to AI if score between 0.3 and 0.8
 BORDERLINE_MAX = 0.8
 
+# In-memory cache for fraud rate lookups (5 minute TTL)
+_fraud_rate_cache = {}
+CACHE_TTL = 300  # 5 minutes in seconds
+
 
 def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     """
@@ -64,8 +69,21 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             return create_error_response(400, "Missing event_id")
 
         # Get context data from DynamoDB
-        context_data = get_context_data(event_id, body.get("device_id"), body.get("ip_address"))
-
+        # Check if this is a Google Ads event (limited signals)
+        is_google_ads = body.get('source') == 'google_ads'
+        
+        if is_google_ads:
+            context_data = get_google_ads_context_data(
+                body.get('keyword'),
+                body.get('target_id'),
+                body.get('gclid')
+            )
+        else:
+            context_data = get_context_data(
+                event_id,
+                body.get('device_id'),
+                body.get('ip_address')
+            )
         # Extract features for ML model
         feature_vector = extract_features(body, context_data)
 
@@ -94,6 +112,125 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
 
     except Exception as e:
         return create_error_response(500, f"Orchestration error: {str(e)}")
+
+
+def get_cached_fraud_rate(cache_key: str, fetch_func) -> float:
+    """
+    Get cached fraud rate or fetch and cache if expired
+    
+    Args:
+        cache_key: Cache key (e.g., 'keyword:buy-shoes' or 'target:placement-123')
+        fetch_func: Function to call if cache miss or expired
+        
+    Returns:
+        Fraud rate (0.0-1.0)
+    """
+    now = time.time()
+    
+    # Check cache
+    if cache_key in _fraud_rate_cache:
+        value, timestamp = _fraud_rate_cache[cache_key]
+        if now - timestamp < CACHE_TTL:
+            return value
+    
+    # Cache miss or expired - fetch and cache
+    value = fetch_func()
+    _fraud_rate_cache[cache_key] = (value, now)
+    return value
+
+
+def get_google_ads_context_data(keyword: str, target_id: str, gclid: str) -> Dict[str, Any]:
+    """
+    Get context data for Google Ads events (limited signals)
+    
+    Args:
+        keyword: Keyword from Google Ads
+        target_id: Target/placement ID
+        gclid: Google Click ID
+        
+    Returns:
+        Context data dictionary with Google-specific features
+    """
+    if not TABLE_NAME:
+        return {}
+    
+    try:
+        # Import storage utilities
+        try:
+            from storage.dynamodb_utils import (
+                get_keyword_fraud_rate,
+                get_target_fraud_rate
+            )
+        except ImportError:
+            # Fallback - define simple functions
+            def get_keyword_fraud_rate(table_name, keyword, days=30):
+                return 0.0
+            def get_target_fraud_rate(table_name, target_id, days=30):
+                return 0.0
+        
+        # Get historical fraud rates with caching
+        keyword_fraud_rate = 0.0
+        if keyword:
+            cache_key = f'keyword:{keyword}'
+            keyword_fraud_rate = get_cached_fraud_rate(
+                cache_key,
+                lambda: get_keyword_fraud_rate(TABLE_NAME, keyword, days=30)
+            )
+        
+        target_fraud_rate = 0.0
+        if target_id:
+            cache_key = f'target:{target_id}'
+            target_fraud_rate = get_cached_fraud_rate(
+                cache_key,
+                lambda: get_target_fraud_rate(TABLE_NAME, target_id, days=30)
+            )
+        
+        # Analyze GCLID pattern (simplified - would use more sophisticated analysis)
+        gclid_pattern_score = analyze_gclid_pattern(gclid) if gclid else 0.5
+        
+        return {
+            'keyword_fraud_rate': keyword_fraud_rate,
+            'target_fraud_rate': target_fraud_rate,
+            'gclid_pattern_score': gclid_pattern_score,
+            # Set missing signals to defaults
+            'ip_click_count_24h': 0,
+            'device_click_count_1h': 0,
+            'time_since_last_click': None
+        }
+    except Exception as e:
+        print(f"Error getting Google Ads context data: {str(e)}")
+        return {}
+
+
+def analyze_gclid_pattern(gclid: str) -> float:
+    """
+    Analyze GCLID for bot-like patterns
+    
+    Args:
+        gclid: Google Click ID
+        
+    Returns:
+        Pattern score (0.0-1.0, higher = more suspicious)
+    """
+    if not gclid:
+        return 0.5
+    
+    # Simple pattern analysis
+    # In production, would use more sophisticated analysis
+    # Check for suspicious patterns like:
+    # - Low entropy (repetitive characters)
+    # - Sequential patterns
+    # - Unusual character distributions
+    
+    from feature_extractor import calculate_entropy
+    
+    entropy = calculate_entropy(gclid)
+    
+    # Lower entropy = more suspicious (bot-like patterns)
+    # Normalize to 0-1 (inverse: low entropy = high suspicion)
+    pattern_score = 1.0 - entropy
+    
+    return pattern_score
 
 
 def get_context_data(event_id: str, device_id: str, ip_address: str) -> Dict[str, Any]:

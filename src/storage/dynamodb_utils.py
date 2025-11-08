@@ -7,8 +7,11 @@ from decimal import Decimal
 from typing import Any, Dict, List, Optional
 
 import boto3
+import os
 
-dynamodb = boto3.resource("dynamodb")
+# Get region from environment or default to us-east-1
+AWS_REGION = os.environ.get('AWS_REGION', 'us-east-1')
+dynamodb = boto3.resource("dynamodb", region_name=AWS_REGION)
 
 
 def get_table(table_name: str):
@@ -198,7 +201,196 @@ def get_time_since_last_click(table_name: str, device_id: str) -> Optional[int]:
     return now_timestamp - last_click_timestamp
 
 
-def update_event_result(table_name: str, event_id: str, fraud_result: Dict[str, Any]) -> None:
+def query_events_by_gclid(
+    table_name: str,
+    gclid: str,
+    start_timestamp: Optional[int] = None,
+    end_timestamp: Optional[int] = None
+) -> List[Dict[str, Any]]:
+    """
+    Query events by gclid using GSI
+    
+    Args:
+        table_name: Name of the DynamoDB table
+        gclid: Google Click ID to query
+        start_timestamp: Start timestamp (Unix epoch)
+        end_timestamp: End timestamp (Unix epoch)
+        
+    Returns:
+        List of event dictionaries
+    """
+    if not gclid:
+        return []
+    
+    table = get_table(table_name)
+    
+    key_condition = 'gclid = :gclid'
+    expression_values = {':gclid': gclid}
+    
+    if start_timestamp and end_timestamp:
+        key_condition += ' AND timestamp BETWEEN :start AND :end'
+        expression_values[':start'] = start_timestamp
+        expression_values[':end'] = end_timestamp
+    
+    try:
+        response = table.query(
+            IndexName='gclid-timestamp-index',
+            KeyConditionExpression=key_condition,
+            ExpressionAttributeValues=expression_values
+        )
+        return response.get('Items', [])
+    except Exception as e:
+        print(f"Error querying events by gclid: {str(e)}")
+        return []
+
+
+def query_events_by_keyword(
+    table_name: str,
+    keyword: str,
+    start_timestamp: Optional[int] = None,
+    end_timestamp: Optional[int] = None
+) -> List[Dict[str, Any]]:
+    """
+    Query events by keyword using GSI
+    
+    Args:
+        table_name: Name of the DynamoDB table
+        keyword: Keyword to query
+        start_timestamp: Start timestamp (Unix epoch)
+        end_timestamp: End timestamp (Unix epoch)
+        
+    Returns:
+        List of event dictionaries
+    """
+    if not keyword:
+        return []
+    
+    table = get_table(table_name)
+    
+    key_condition = 'keyword = :keyword'
+    expression_values = {':keyword': keyword}
+    
+    if start_timestamp and end_timestamp:
+        key_condition += ' AND timestamp BETWEEN :start AND :end'
+        expression_values[':start'] = start_timestamp
+        expression_values[':end'] = end_timestamp
+    
+    try:
+        response = table.query(
+            IndexName='keyword-timestamp-index',
+            KeyConditionExpression=key_condition,
+            ExpressionAttributeValues=expression_values
+        )
+        return response.get('Items', [])
+    except Exception as e:
+        print(f"Error querying events by keyword: {str(e)}")
+        return []
+
+
+def query_events_by_target(
+    table_name: str,
+    target_id: str,
+    start_timestamp: Optional[int] = None,
+    end_timestamp: Optional[int] = None
+) -> List[Dict[str, Any]]:
+    """
+    Query events by target_id using GSI
+    
+    Args:
+        table_name: Name of the DynamoDB table
+        target_id: Target ID to query
+        start_timestamp: Start timestamp (Unix epoch)
+        end_timestamp: End timestamp (Unix epoch)
+        
+    Returns:
+        List of event dictionaries
+    """
+    if not target_id:
+        return []
+    
+    table = get_table(table_name)
+    
+    key_condition = 'target_id = :target_id'
+    expression_values = {':target_id': target_id}
+    
+    if start_timestamp and end_timestamp:
+        key_condition += ' AND timestamp BETWEEN :start AND :end'
+        expression_values[':start'] = start_timestamp
+        expression_values[':end'] = end_timestamp
+    
+    try:
+        response = table.query(
+            IndexName='target-timestamp-index',
+            KeyConditionExpression=key_condition,
+            ExpressionAttributeValues=expression_values
+        )
+        return response.get('Items', [])
+    except Exception as e:
+        print(f"Error querying events by target: {str(e)}")
+        return []
+
+
+def get_keyword_fraud_rate(table_name: str, keyword: str, days: int = 30) -> float:
+    """
+    Calculate historical fraud rate for keyword
+    
+    Args:
+        table_name: Name of the DynamoDB table
+        keyword: Keyword to analyze
+        days: Number of days to look back
+        
+    Returns:
+        Fraud rate (0.0-1.0)
+    """
+    if not keyword:
+        return 0.0
+    
+    now = datetime.now(timezone.utc)
+    start_timestamp = int((now - timedelta(days=days)).timestamp())
+    end_timestamp = int(now.timestamp())
+    
+    events = query_events_by_keyword(table_name, keyword, start_timestamp, end_timestamp)
+    
+    if not events:
+        return 0.0
+    
+    fraud_count = sum(1 for e in events if e.get('is_fraud', False) or e.get('fraud_score', 0) > 0.65)
+    return fraud_count / len(events)
+
+
+def get_target_fraud_rate(table_name: str, target_id: str, days: int = 30) -> float:
+    """
+    Calculate historical fraud rate for target/placement
+    
+    Args:
+        table_name: Name of the DynamoDB table
+        target_id: Target ID to analyze
+        days: Number of days to look back
+        
+    Returns:
+        Fraud rate (0.0-1.0)
+    """
+    if not target_id:
+        return 0.0
+    
+    now = datetime.now(timezone.utc)
+    start_timestamp = int((now - timedelta(days=days)).timestamp())
+    end_timestamp = int(now.timestamp())
+    
+    events = query_events_by_target(table_name, target_id, start_timestamp, end_timestamp)
+    
+    if not events:
+        return 0.0
+    
+    fraud_count = sum(1 for e in events if e.get('is_fraud', False) or e.get('fraud_score', 0) > 0.65)
+    return fraud_count / len(events)
+
+
+def update_event_result(
+    table_name: str,
+    event_id: str,
+    fraud_result: Dict[str, Any]
+) -> None:
     """
     Update event with fraud detection result
 
