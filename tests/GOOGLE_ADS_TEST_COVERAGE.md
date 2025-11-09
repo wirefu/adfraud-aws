@@ -6,7 +6,7 @@ This document outlines the comprehensive test coverage for the Google Ads tracki
 
 ## Test Files
 
-1. **`test_google_ads_simple.py`** - Basic functionality and validation tests
+1. **`scripts/test_google_ads_simple.py`** - Basic functionality and validation tests
 2. **`test_google_ads_tracking.py`** - Comprehensive pytest-based test suite
 3. **`test_google_ads_edge_cases.py`** - Edge cases, security, and stress tests
 
@@ -106,7 +106,7 @@ This document outlines the comprehensive test coverage for the Google Ads tracki
 
 ```bash
 # Basic tests
-python test_google_ads_simple.py
+python scripts/test_google_ads_simple.py
 
 # Edge case tests
 python tests/test_google_ads_edge_cases.py

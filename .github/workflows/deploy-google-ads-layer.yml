@@ -1,0 +1,306 @@
+name: Deploy Google Ads Lambda Layer
+
+on:
+  push:
+    branches: [ main, develop ]
+    paths:
+      - 'src/google_ads_ingestion/**'
+      - 'scripts/build-google-ads-layer.sh'
+      - 'scripts/publish-google-ads-layer.sh'
+      - '.github/workflows/deploy-google-ads-layer.yml'
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Deployment environment'
+        required: true
+        default: 'dev'
+        type: choice
+        options:
+          - dev
+          - staging
+          - prod
+      rebuild_layer:
+        description: 'Rebuild layer (even if no changes)'
+        required: false
+        default: false
+        type: boolean
+
+env:
+  AWS_REGION: us-east-1
+  PYTHON_VERSION: '3.11'
+  LAYER_NAME: google-ads-dependencies
+  FUNCTION_NAME: fraudguard-ai-dev-GoogleAdsIngestion
+  S3_BUCKET: fraudguard-ai-dev-data-971422717446
+
+jobs:
+  build-and-deploy-layer:
+    name: Build and Deploy Lambda Layer
+    runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.environment || 'dev' }}
+    
+    steps:
+      - name: Set environment variables
+        id: env
+        run: |
+          ENV="${{ github.event.inputs.environment || 'dev' }}"
+          echo "environment=${ENV}" >> $GITHUB_OUTPUT
+          
+          # Set environment-specific values
+          case $ENV in
+            dev)
+              echo "function_name=fraudguard-ai-dev-GoogleAdsIngestion" >> $GITHUB_OUTPUT
+              echo "s3_bucket=fraudguard-ai-dev-data-971422717446" >> $GITHUB_OUTPUT
+              echo "table_name=google-ads-metrics-dev" >> $GITHUB_OUTPUT
+              ;;
+            staging)
+              echo "function_name=fraudguard-ai-staging-GoogleAdsIngestion" >> $GITHUB_OUTPUT
+              echo "s3_bucket=fraudguard-ai-staging-data-971422717446" >> $GITHUB_OUTPUT
+              echo "table_name=google-ads-metrics-staging" >> $GITHUB_OUTPUT
+              ;;
+            prod)
+              echo "function_name=fraudguard-ai-prod-GoogleAdsIngestion" >> $GITHUB_OUTPUT
+              echo "s3_bucket=fraudguard-ai-prod-data-971422717446" >> $GITHUB_OUTPUT
+              echo "table_name=google-ads-metrics-prod" >> $GITHUB_OUTPUT
+              ;;
+            *)
+              echo "function_name=fraudguard-ai-dev-GoogleAdsIngestion" >> $GITHUB_OUTPUT
+              echo "s3_bucket=fraudguard-ai-dev-data-971422717446" >> $GITHUB_OUTPUT
+              echo "table_name=google-ads-metrics-dev" >> $GITHUB_OUTPUT
+              ENV="dev"
+              ;;
+          esac
+          echo "✅ Environment set to: ${ENV}"
+      
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+      
+      - name: Build Lambda Layer
+        id: build-layer
+        run: |
+          echo "Building Lambda layer using Docker..."
+          
+          LAYER_DIR="build/layers/${{ env.LAYER_NAME }}"
+          mkdir -p "$LAYER_DIR/python"
+          
+          # Build layer using Docker with Lambda Python base image
+          docker run --rm \
+            -v "$PWD:/var/task" \
+            -w /var/task \
+            public.ecr.aws/lambda/python:${{ env.PYTHON_VERSION }} \
+            /bin/bash -c "
+              echo 'Installing Google Ads dependencies...'
+              pip install --no-cache-dir google-ads -t $LAYER_DIR/python/
+              
+              echo 'Cleaning up unnecessary files...'
+              find $LAYER_DIR/python -type d -name '__pycache__' -exec rm -rf {} + 2>/dev/null || true
+              find $LAYER_DIR/python -type d -name '*.dist-info' -exec rm -rf {} + 2>/dev/null || true
+              find $LAYER_DIR/python -type d -name '*.egg-info' -exec rm -rf {} + 2>/dev/null || true
+              
+              echo 'Calculating layer size...'
+              du -sh $LAYER_DIR/python/
+            "
+          
+          # Create layer zip
+          cd "$LAYER_DIR"
+          zip -r "../${{ env.LAYER_NAME }}.zip" . -q
+          cd "$OLDPWD"
+          
+          LAYER_ZIP="build/layers/${{ env.LAYER_NAME }}.zip"
+          LAYER_SIZE=$(du -h "$LAYER_ZIP" | cut -f1)
+          LAYER_SIZE_BYTES=$(stat -c%s "$LAYER_ZIP")
+          LAYER_SIZE_MB=$((LAYER_SIZE_BYTES / 1024 / 1024))
+          
+          echo "Layer zip created: $LAYER_ZIP"
+          echo "Layer size: $LAYER_SIZE ($LAYER_SIZE_MB MB)"
+          
+          # Check size limit (50MB zipped)
+          if [ $LAYER_SIZE_MB -gt 50 ]; then
+            echo "ERROR: Layer size ($LAYER_SIZE_MB MB) exceeds Lambda's 50MB zipped limit!"
+            exit 1
+          fi
+          
+          echo "layer_zip=$LAYER_ZIP" >> $GITHUB_OUTPUT
+          echo "layer_size=$LAYER_SIZE" >> $GITHUB_OUTPUT
+          echo "layer_size_mb=$LAYER_SIZE_MB" >> $GITHUB_OUTPUT
+      
+      - name: Publish Lambda Layer
+        id: publish-layer
+        run: |
+          echo "Publishing layer to AWS Lambda..."
+          
+          LAYER_VERSION=$(aws lambda publish-layer-version \
+            --layer-name "${{ env.LAYER_NAME }}" \
+            --zip-file "fileb://build/layers/${{ env.LAYER_NAME }}.zip" \
+            --compatible-runtimes "python${{ env.PYTHON_VERSION }}" \
+            --description "Google Ads API dependencies for Lambda functions" \
+            --region "${{ env.AWS_REGION }}" \
+            --query 'Version' \
+            --output text)
+          
+          LAYER_ARN=$(aws lambda get-layer-version \
+            --layer-name "${{ env.LAYER_NAME }}" \
+            --version-number "$LAYER_VERSION" \
+            --region "${{ env.AWS_REGION }}" \
+            --query 'LayerVersionArn' \
+            --output text)
+          
+          echo "Layer published successfully!"
+          echo "Layer ARN: $LAYER_ARN"
+          echo "Version: $LAYER_VERSION"
+          
+          echo "layer_arn=$LAYER_ARN" >> $GITHUB_OUTPUT
+          echo "layer_version=$LAYER_VERSION" >> $GITHUB_OUTPUT
+      
+      - name: Update Lambda Function with Layer
+        run: |
+          echo "Updating Lambda function to use layer..."
+          
+          FUNCTION_NAME="${{ steps.env.outputs.function_name }}"
+          LAYER_ARN="${{ steps.publish-layer.outputs.layer_arn }}"
+          
+          # Get current layers
+          CURRENT_LAYERS=$(aws lambda get-function-configuration \
+            --function-name "$FUNCTION_NAME" \
+            --region "${{ env.AWS_REGION }}" \
+            --query 'Layers[*].Arn' \
+            --output text 2>/dev/null || echo "")
+          
+          # Update function with layer
+          if [ -n "$CURRENT_LAYERS" ] && [ "$CURRENT_LAYERS" != "None" ]; then
+            # Check if layer already attached
+            if echo "$CURRENT_LAYERS" | grep -q "${{ env.LAYER_NAME }}"; then
+              echo "Layer already attached, updating to new version..."
+              # Remove old layer versions and add new one
+              LAYERS=$(echo "$CURRENT_LAYERS" | tr ' ' '\n' | grep -v "${{ env.LAYER_NAME }}" | tr '\n' ' ')
+              LAYERS="$LAYERS$LAYER_ARN"
+            else
+              # Append to existing layers
+              LAYERS="$CURRENT_LAYERS $LAYER_ARN"
+            fi
+          else
+            # First layer
+            LAYERS="$LAYER_ARN"
+          fi
+          
+          aws lambda update-function-configuration \
+            --function-name "$FUNCTION_NAME" \
+            --layers $LAYERS \
+            --region "${{ env.AWS_REGION }}"
+          
+          echo "✅ Lambda function updated with layer"
+      
+      - name: Rebuild Function Package (Code Only)
+        id: rebuild-function
+        run: |
+          echo "Rebuilding function package (code only, no dependencies)..."
+          
+          FUNCTION_NAME="google_ads_ingestion"
+          BUILD_DIR="build/$FUNCTION_NAME"
+          FUNCTION_SRC="src/$FUNCTION_NAME"
+          
+          # Clean previous build
+          rm -rf "$BUILD_DIR"
+          mkdir -p "$BUILD_DIR"
+          
+          # Copy source files
+          cp -r "$FUNCTION_SRC"/* "$BUILD_DIR/"
+          
+          # Create zip (exclude cache files)
+          cd "$BUILD_DIR"
+          zip -r "../${FUNCTION_NAME}.zip" . -q -x "*.pyc" -x "__pycache__/*" -x "*.pyo" -x ".DS_Store"
+          cd "$OLDPWD"
+          
+          ZIP_FILE="build/${FUNCTION_NAME}.zip"
+          ZIP_SIZE=$(du -h "$ZIP_FILE" | cut -f1)
+          
+          echo "Function package created: $ZIP_FILE"
+          echo "Size: $ZIP_SIZE"
+          
+          echo "function_zip=$ZIP_FILE" >> $GITHUB_OUTPUT
+          echo "function_size=$ZIP_SIZE" >> $GITHUB_OUTPUT
+      
+      - name: Upload Function Package to S3
+        run: |
+          echo "Uploading function package to S3..."
+          
+          S3_BUCKET="${{ steps.env.outputs.s3_bucket }}"
+          S3_KEY="lambda-packages/google_ads_ingestion.zip"
+          
+          aws s3 cp "build/google_ads_ingestion.zip" \
+            "s3://${S3_BUCKET}/${S3_KEY}" \
+            --region "${{ env.AWS_REGION }}"
+          
+          echo "✅ Function package uploaded to s3://${S3_BUCKET}/${S3_KEY}"
+      
+      - name: Update Lambda Function Code
+        run: |
+          echo "Updating Lambda function code..."
+          
+          FUNCTION_NAME="${{ steps.env.outputs.function_name }}"
+          S3_BUCKET="${{ steps.env.outputs.s3_bucket }}"
+          S3_KEY="lambda-packages/google_ads_ingestion.zip"
+          
+          aws lambda update-function-code \
+            --function-name "$FUNCTION_NAME" \
+            --s3-bucket "$S3_BUCKET" \
+            --s3-key "$S3_KEY" \
+            --region "${{ env.AWS_REGION }}"
+          
+          echo "✅ Lambda function code updated"
+      
+      - name: Wait for Function Update
+        run: |
+          echo "Waiting for Lambda function update to complete..."
+          
+          FUNCTION_NAME="${{ steps.env.outputs.function_name }}"
+          
+          aws lambda wait function-updated \
+            --function-name "$FUNCTION_NAME" \
+            --region "${{ env.AWS_REGION }}"
+          
+          echo "✅ Lambda function update complete"
+      
+      - name: Output Deployment Summary
+        run: |
+          echo "## 🎉 Deployment Complete" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Layer Information" >> $GITHUB_STEP_SUMMARY
+          echo "- **Layer Name**: \`${{ env.LAYER_NAME }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Layer ARN**: \`${{ steps.publish-layer.outputs.layer_arn }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Layer Version**: \`${{ steps.publish-layer.outputs.layer_version }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Layer Size**: \`${{ steps.build-layer.outputs.layer_size }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Function Information" >> $GITHUB_STEP_SUMMARY
+          echo "- **Function Name**: \`${{ steps.env.outputs.function_name }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Function Package Size**: \`${{ steps.rebuild-function.outputs.function_size }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **S3 Location**: \`s3://${{ steps.env.outputs.s3_bucket }}/lambda-packages/google_ads_ingestion.zip\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Next Steps" >> $GITHUB_STEP_SUMMARY
+          echo "1. Test the Lambda function:" >> $GITHUB_STEP_SUMMARY
+          echo "   \`\`\`bash" >> $GITHUB_STEP_SUMMARY
+          echo "   aws lambda invoke \\" >> $GITHUB_STEP_SUMMARY
+          echo "     --function-name ${{ steps.env.outputs.function_name }} \\" >> $GITHUB_STEP_SUMMARY
+          echo "     --payload '{}' \\" >> $GITHUB_STEP_SUMMARY
+          echo "     --region ${{ env.AWS_REGION }} \\" >> $GITHUB_STEP_SUMMARY
+          echo "     /tmp/lambda-response.json" >> $GITHUB_STEP_SUMMARY
+          echo "   \`\`\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "2. Check CloudWatch logs:" >> $GITHUB_STEP_SUMMARY
+          echo "   \`\`\`bash" >> $GITHUB_STEP_SUMMARY
+          echo "   aws logs tail /aws/lambda/${{ steps.env.outputs.function_name }} --follow --region ${{ env.AWS_REGION }}" >> $GITHUB_STEP_SUMMARY
+          echo "   \`\`\`" >> $GITHUB_STEP_SUMMARY
+          
+          echo ""
+          echo "=== Deployment Summary ==="
+          echo "Layer ARN: ${{ steps.publish-layer.outputs.layer_arn }}"
+          echo "Layer Version: ${{ steps.publish-layer.outputs.layer_version }}"
+          echo "Function: ${{ steps.env.outputs.function_name }}"
+          echo "Environment: ${{ steps.env.outputs.environment }}"
+

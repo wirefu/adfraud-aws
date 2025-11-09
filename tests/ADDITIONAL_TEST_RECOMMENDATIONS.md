@@ -147,7 +147,7 @@ All critical paths are covered:
 
 ```bash
 # Run all tests
-python test_google_ads_simple.py                    # Basic tests
+python scripts/test_google_ads_simple.py                    # Basic tests
 python tests/test_google_ads_edge_cases.py         # Edge cases
 pytest tests/test_google_ads_tracking.py -v        # Comprehensive tests
 

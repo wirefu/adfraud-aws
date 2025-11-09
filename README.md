@@ -27,6 +27,7 @@ The system uses a two-tier detection approach:
 .
 ├── template.yaml          # AWS SAM template
 ├── samconfig.toml        # SAM configuration
+├── docs/                 # Additional documentation
 ├── src/
 │   ├── ingestion/        # Ingestion handler Lambda
 │   ├── orchestrator/     # Fraud orchestrator Lambda
@@ -78,6 +79,24 @@ Set up your `.env` file with:
 - AWS credentials
 - API keys for Bedrock
 - Other configuration
+
+## Documentation
+
+Additional documentation is available in the [`/docs`](docs/) folder:
+
+- **Product Requirements**: [`ad-fraud-detection-prd.md`](docs/ad-fraud-detection-prd.md)
+- **Integration Guides**: 
+  - [`INTEGRATION.md`](docs/INTEGRATION.md)
+  - [`fraudguard-google-ads-integration.md`](docs/fraudguard-google-ads-integration.md)
+  - [`GOOGLE_ADS_IMPLEMENTATION.md`](docs/GOOGLE_ADS_IMPLEMENTATION.md)
+- **Storage**: [`STORAGE.md`](docs/STORAGE.md)
+- **Testing**: [`TESTING_BEDROCK.md`](docs/TESTING_BEDROCK.md)
+- **Development**: [`BRANCH_STRATEGY.md`](docs/BRANCH_STRATEGY.md)
+
+Module-specific documentation:
+- **Dashboard**: [`dashboard/README.md`](dashboard/README.md) and [`dashboard/DEPLOYMENT.md`](dashboard/DEPLOYMENT.md)
+- **Scripts**: [`scripts/README.md`](scripts/README.md)
+- **Components**: See README files in respective `src/` subdirectories
 
 ## Resources
 
