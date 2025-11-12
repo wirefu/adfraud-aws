@@ -94,3 +94,4 @@ google-ads.yaml
 .google-ads.yaml
 google_ads_credentials.json
 secrets.json
+.secrets.json
