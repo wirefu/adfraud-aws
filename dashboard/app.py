@@ -623,7 +623,7 @@ def get_mock_events(hours: int = 24) -> List[Dict[str, Any]]:
     return events
 
 
-def calculate_metrics(events: List[Dict[str, Any]]) -> Dict[str, Any]:
+def calculate_metrics(events: List[Dict[str, Any]], cost_per_click: float = 0.50) -> Dict[str, Any]:
     """Calculate dashboard metrics from events"""
     if not events:
         return {
@@ -631,10 +631,14 @@ def calculate_metrics(events: List[Dict[str, Any]]) -> Dict[str, Any]:
             'fraud_count': 0,
             'fraud_rate': 0.0,
             'legitimate_count': 0,
+            'total_ad_spend': 0.0,
+            'fraud_loss': 0.0,
             'fraud_by_type': {},
             'top_signals': {},
             'fraud_by_campaign': {},
-            'fraud_by_country': {}
+            'fraud_by_country': {},
+            'cost_by_country': {},
+            'fraud_cost_by_country': {}
         }
     
     df = pd.DataFrame(events)
@@ -647,6 +651,10 @@ def calculate_metrics(events: List[Dict[str, Any]]) -> Dict[str, Any]:
     total_events = len(df)
     fraud_count = df['is_fraud'].sum() if 'is_fraud' in df.columns else 0
     fraud_rate = (fraud_count / total_events * 100) if total_events > 0 else 0.0
+    
+    # Cost calculations
+    total_ad_spend = total_events * cost_per_click
+    fraud_loss = fraud_count * cost_per_click
     
     # Fraud by type
     fraud_by_type = {}
@@ -684,19 +692,39 @@ def calculate_metrics(events: List[Dict[str, Any]]) -> Dict[str, Any]:
         country_fraud['fraud_rate'] = (country_fraud['fraud_count'] / country_fraud['total_count'] * 100).round(2)
         fraud_by_country = country_fraud.set_index('country')['fraud_rate'].to_dict()
     
+    # Cost by country
+    cost_by_country = {}
+    if 'ip_country' in df.columns:
+        country_cost = df.groupby('ip_country').size().reset_index(name='count')
+        country_cost['cost'] = country_cost['count'] * cost_per_click
+        cost_by_country = country_cost.set_index('ip_country')['cost'].to_dict()
+    
+    # Fraud cost by country
+    fraud_cost_by_country = {}
+    if 'ip_country' in df.columns and 'is_fraud' in df.columns:
+        fraud_df = df[df['is_fraud'] == True] if 'is_fraud' in df.columns else pd.DataFrame()
+        if not fraud_df.empty and 'ip_country' in fraud_df.columns:
+            country_fraud_cost = fraud_df.groupby('ip_country').size().reset_index(name='fraud_count')
+            country_fraud_cost['fraud_cost'] = country_fraud_cost['fraud_count'] * cost_per_click
+            fraud_cost_by_country = country_fraud_cost.set_index('ip_country')['fraud_cost'].to_dict()
+    
     return {
         'total_events': total_events,
         'fraud_count': int(fraud_count),
         'fraud_rate': round(fraud_rate, 2),
         'legitimate_count': int(total_events - fraud_count),
+        'total_ad_spend': round(total_ad_spend, 2),
+        'fraud_loss': round(fraud_loss, 2),
         'fraud_by_type': fraud_by_type,
         'top_signals': top_signals,
         'fraud_by_campaign': fraud_by_campaign,
-        'fraud_by_country': fraud_by_country
+        'fraud_by_country': fraud_by_country,
+        'cost_by_country': cost_by_country,
+        'fraud_cost_by_country': fraud_cost_by_country
     }
 
 
-def render_real_time_overview(events: List[Dict[str, Any]], metrics: Dict[str, Any]):
+def render_real_time_overview(events: List[Dict[str, Any]], metrics: Dict[str, Any], cost_per_click: float = 0.50):
     """Render real-time overview dashboard"""
     st.header("📊 Real-Time Overview")
     
@@ -706,7 +734,7 @@ def render_real_time_overview(events: List[Dict[str, Any]], metrics: Dict[str, A
     
     # Show honeypot stats if available
     if honeypot_events:
-        honeypot_metrics = calculate_metrics(honeypot_events)
+        honeypot_metrics = calculate_metrics(honeypot_events, cost_per_click)
         with st.expander("🍯 Honeypot Events", expanded=False):
             col1, col2, col3, col4 = st.columns(4)
             with col1:
@@ -718,7 +746,7 @@ def render_real_time_overview(events: List[Dict[str, Any]], metrics: Dict[str, A
             with col4:
                 st.metric("Honeypot Fraud Rate", f"{honeypot_metrics['fraud_rate']:.2f}%")
     
-    # Key metrics
+    # Key metrics - Updated to match screenshot
     col1, col2, col3, col4 = st.columns(4)
     
     with col1:
@@ -728,10 +756,10 @@ def render_real_time_overview(events: List[Dict[str, Any]], metrics: Dict[str, A
         st.metric("Fraud Detected", metrics['fraud_count'], delta=f"{metrics['fraud_rate']:.1f}%")
     
     with col3:
-        st.metric("Legitimate", metrics['legitimate_count'])
+        st.metric("Total Ad Spend", f"${metrics['total_ad_spend']:.2f}")
     
     with col4:
-        st.metric("Fraud Rate", f"{metrics['fraud_rate']:.2f}%")
+        st.metric("Fraud Loss", f"${metrics['fraud_loss']:.2f}")
     
     st.divider()
     
@@ -768,26 +796,57 @@ def render_real_time_overview(events: List[Dict[str, Any]], metrics: Dict[str, A
         else:
             st.info("No fraud signals available")
     
-    # Geographic heatmap
+    # Geographic heatmap - Updated to show fraud cost
     st.subheader("🌍 Geographic Fraud Distribution")
-    if metrics['fraud_by_country']:
+    if metrics['fraud_cost_by_country']:
         country_df = pd.DataFrame({
-            'Country': list(metrics['fraud_by_country'].keys()),
-            'Fraud Rate (%)': list(metrics['fraud_by_country'].values())
+            'Country': list(metrics['fraud_cost_by_country'].keys()),
+            'Fraud Cost ($)': list(metrics['fraud_cost_by_country'].values())
         })
         
-        # Create choropleth map
+        # Create choropleth map showing fraud cost
         fig = px.choropleth(
             country_df,
             locations='Country',
             locationmode='ISO-3',
-            color='Fraud Rate (%)',
-            title="Fraud Rate by Country",
+            color='Fraud Cost ($)',
+            title="Fraud Cost by Country",
             color_continuous_scale='Reds'
         )
         st.plotly_chart(fig, use_container_width=True)
     else:
         st.info("No geographic data available")
+    
+    # Cost by Country Table
+    st.subheader("Cost by Country")
+    if metrics['cost_by_country']:
+        cost_df = pd.DataFrame({
+            'Country': list(metrics['cost_by_country'].keys()),
+            'Cost': list(metrics['cost_by_country'].values())
+        }).sort_values('Cost', ascending=False)
+        st.dataframe(cost_df, use_container_width=True, hide_index=True)
+    else:
+        st.info("No cost data available")
+    
+    # Fraud Cost by Country Bar Chart
+    st.subheader("Fraud Cost by Country")
+    if metrics['fraud_cost_by_country']:
+        fraud_cost_df = pd.DataFrame({
+            'Country': list(metrics['fraud_cost_by_country'].keys()),
+            'Fraud Cost ($)': list(metrics['fraud_cost_by_country'].values())
+        }).sort_values('Fraud Cost ($)', ascending=False)
+        
+        fig = px.bar(
+            fraud_cost_df,
+            x='Country',
+            y='Fraud Cost ($)',
+            title="Fraud Cost by Country",
+            color='Fraud Cost ($)',
+            color_continuous_scale='Reds'
+        )
+        st.plotly_chart(fig, use_container_width=True)
+    else:
+        st.info("No fraud cost data available")
     
     # Honeypot events breakdown
     if honeypot_events:
@@ -954,6 +1013,213 @@ def render_event_detail(events: List[Dict[str, Any]]):
         st.info(selected_event['reasoning'])
 
 
+def _convert_google_ads_api_to_events(
+    performance_data: List[Dict[str, Any]],
+    keyword_data: List[Dict[str, Any]],
+    placement_data: List[Dict[str, Any]],
+    hours: int
+) -> List[Dict[str, Any]]:
+    """
+    Convert Google Ads API performance data into event format for display
+    
+    Args:
+        performance_data: Campaign performance data from API
+        keyword_data: Keyword performance data from API
+        placement_data: Placement performance data from API
+        hours: Time range in hours
+    
+    Returns:
+        List of events in format compatible with dashboard
+    """
+    import random
+    events = []
+    now = datetime.now(timezone.utc)
+    
+    # Process performance data (campaign-level)
+    for perf in performance_data:
+        campaign_id = str(perf.get('campaign_id', ''))
+        clicks = perf.get('clicks', 0)
+        cost_micros = perf.get('cost_micros', 0)
+        avg_cpc_micros = perf.get('avg_cpc_micros', 0)
+        date_str = perf.get('date', '')
+        timestamp = perf.get('timestamp', int(now.timestamp()))
+        
+        # Create individual click events from aggregated data
+        # Distribute clicks across the day
+        total_impressions = perf.get('impressions', 0)
+        total_conversions = perf.get('conversions', 0)
+        
+        for i in range(clicks):
+            # Distribute timestamp within the day
+            click_offset = random.uniform(0, 1)  # Random time within day
+            event_timestamp = int(timestamp - (click_offset * 86400))  # Spread across day
+            
+            # Generate a mock GCLID for API data (since API doesn't provide individual GCLIDs)
+            gclid = f"API-{campaign_id}-{event_timestamp}-{i}"
+            
+            # Calculate per-click metrics (distribute aggregated values)
+            # For impressions, use average per click (since we can't know exact impression per click)
+            impressions_per_click = total_impressions / clicks if clicks > 0 else 0
+            # For conversions, use probability (conversion rate)
+            has_conversion = random.random() < (total_conversions / clicks) if clicks > 0 else False
+            # For cost, use average CPC
+            click_cost_micros = avg_cpc_micros if avg_cpc_micros > 0 else (cost_micros / clicks if clicks > 0 else 0)
+            
+            event = {
+                'event_id': f'google-ads-api-{campaign_id}-{event_timestamp}-{i}',
+                'timestamp': event_timestamp,
+                'source': 'google_ads_api',
+                'campaign_id': campaign_id,
+                'campaign_name': perf.get('campaign_name', ''),
+                'gclid': gclid,
+                'keyword': '',  # Will be filled from keyword_data if available
+                'target_id': '',  # Will be filled from placement_data if available
+                'ad_group_id': '',
+                'cost_micros': click_cost_micros,
+                'clicks': 1,
+                'impressions': impressions_per_click,
+                'conversions': 1 if has_conversion else 0,
+                'ctr': perf.get('ctr', 0.0),
+                'is_fraud': False,  # Will be determined by fraud detection data
+                'fraud_score': 0.0,  # Will be merged from fraud events
+                'primary_fraud_type': 'legitimate',
+                'fraud_signals': []
+            }
+            events.append(event)
+    
+    # Enhance with keyword data
+    keyword_lookup = {}
+    for kw in keyword_data:
+        key = (str(kw.get('campaign_id', '')), kw.get('date', ''))
+        if key not in keyword_lookup:
+            keyword_lookup[key] = []
+        keyword_lookup[key].append(kw)
+    
+    # Match events with keywords
+    for event in events:
+        campaign_id = event.get('campaign_id', '')
+        event_date = datetime.fromtimestamp(event.get('timestamp', 0), tz=timezone.utc).strftime('%Y-%m-%d')
+        key = (campaign_id, event_date)
+        
+        if key in keyword_lookup:
+            # Assign keyword from matching keyword data (randomly if multiple)
+            matching_keywords = keyword_lookup[key]
+            if matching_keywords:
+                kw = random.choice(matching_keywords)
+                event['keyword'] = kw.get('keyword', '')
+                event['ad_group_id'] = str(kw.get('ad_group_id', ''))
+    
+    # Enhance with placement data
+    placement_lookup = {}
+    for pl in placement_data:
+        key = (str(pl.get('campaign_id', '')), pl.get('date', ''))
+        if key not in placement_lookup:
+            placement_lookup[key] = []
+        placement_lookup[key].append(pl)
+    
+    # Match events with placements
+    for event in events:
+        campaign_id = event.get('campaign_id', '')
+        event_date = datetime.fromtimestamp(event.get('timestamp', 0), tz=timezone.utc).strftime('%Y-%m-%d')
+        key = (campaign_id, event_date)
+        
+        if key in placement_lookup:
+            # Assign placement from matching placement data
+            matching_placements = placement_lookup[key]
+            if matching_placements:
+                pl = random.choice(matching_placements)
+                event['target_id'] = pl.get('placement_id', '')
+                if not event.get('ad_group_id'):
+                    event['ad_group_id'] = str(pl.get('ad_group_id', ''))
+    
+    return events
+
+
+def _merge_api_data_with_fraud_events(
+    api_events: List[Dict[str, Any]],
+    fraud_events: List[Dict[str, Any]]
+) -> List[Dict[str, Any]]:
+    """
+    Merge Google Ads API events with fraud detection events
+    
+    Args:
+        api_events: Events from Google Ads API
+        fraud_events: Fraud detection events from DynamoDB
+    
+    Returns:
+        Merged events with fraud information
+    """
+    # Create lookup for fraud events by campaign_id, keyword, target_id
+    fraud_lookup = {}
+    for fraud_event in fraud_events:
+        key = (
+            str(fraud_event.get('campaign_id', '')),
+            fraud_event.get('keyword', ''),
+            str(fraud_event.get('target_id', ''))
+        )
+        if key not in fraud_lookup:
+            fraud_lookup[key] = []
+        fraud_lookup[key].append(fraud_event)
+    
+    # Merge fraud data into API events
+    merged_events = []
+    for api_event in api_events:
+        # Try to find matching fraud event
+        campaign_id = str(api_event.get('campaign_id', ''))
+        keyword = api_event.get('keyword', '')
+        target_id = str(api_event.get('target_id', ''))
+        
+        key = (campaign_id, keyword, target_id)
+        
+        # Find best matching fraud event
+        matching_fraud = None
+        if key in fraud_lookup and fraud_lookup[key]:
+            # Use the most recent fraud event
+            matching_fraud = max(fraud_lookup[key], key=lambda x: x.get('timestamp', 0))
+        
+        # Merge fraud information
+        merged_event = api_event.copy()
+        if matching_fraud:
+            merged_event.update({
+                'is_fraud': matching_fraud.get('is_fraud', False),
+                'fraud_score': matching_fraud.get('fraud_score', 0.0),
+                'primary_fraud_type': matching_fraud.get('primary_fraud_type', 'legitimate'),
+                'fraud_signals': matching_fraud.get('fraud_signals', []),
+                'reasoning': matching_fraud.get('reasoning', '')
+            })
+        else:
+            # No fraud data available, keep as legitimate
+            merged_event.update({
+                'is_fraud': False,
+                'fraud_score': 0.0,
+                'primary_fraud_type': 'legitimate',
+                'fraud_signals': []
+            })
+        
+        merged_events.append(merged_event)
+    
+    # Add fraud events that don't have matching API events
+    api_event_keys = set(
+        (str(e.get('campaign_id', '')), e.get('keyword', ''), str(e.get('target_id', '')))
+        for e in api_events
+    )
+    
+    for fraud_event in fraud_events:
+        key = (
+            str(fraud_event.get('campaign_id', '')),
+            fraud_event.get('keyword', ''),
+            str(fraud_event.get('target_id', ''))
+        )
+        if key not in api_event_keys:
+            # This fraud event doesn't have matching API data, add it anyway
+            merged_events.append(fraud_event)
+    
+    # Sort by timestamp descending
+    merged_events.sort(key=lambda x: x.get('timestamp', 0), reverse=True)
+    
+    return merged_events
+
+
 def render_google_ads_view(hours: int):
     """Render Google Ads focused view"""
     st.header("📊 Google Ads Analysis")
@@ -1061,14 +1327,128 @@ def render_google_ads_view(hours: int):
     
     # Load Google Ads events
     with st.spinner("Loading Google Ads events..."):
-        events = get_google_ads_events(
-            hours=view_hours,
-            campaign_id=selected_campaign if selected_campaign != "All" else None,
-            target_id=selected_target if selected_target != "All" else None,
-            keyword=selected_keyword if selected_keyword != "All" else None,
-            gclid=gclid_search.strip() if gclid_search and gclid_search.strip() else None,
-            fraud_threshold=fraud_threshold
-        )
+        # Try to fetch real Google Ads API data first
+        api_events = []
+        if api_available:
+            try:
+                # Fetch performance data from Google Ads API
+                campaign_id_filter = selected_campaign if selected_campaign != "All" else None
+                
+                # Fetch performance data
+                performance_data = fetch_google_ads_performance(
+                    campaign_id=campaign_id_filter,
+                    hours=view_hours,
+                    use_historical_data=False
+                )
+                
+                # Debug: Show what we got from API
+                if performance_data:
+                    st.success(f"✅ Fetched {len(performance_data)} performance records from Google Ads API")
+                    
+                    # Show summary of performance data
+                    total_clicks = sum(p.get('clicks', 0) for p in performance_data)
+                    total_cost = sum(p.get('cost_micros', 0) for p in performance_data) / 1_000_000
+                    total_impressions = sum(p.get('impressions', 0) for p in performance_data)
+                    
+                    with st.expander("📊 API Performance Data Summary", expanded=False):
+                        st.write(f"**Total Clicks:** {total_clicks:,}")
+                        st.write(f"**Total Impressions:** {total_impressions:,}")
+                        st.write(f"**Total Cost:** ${total_cost:.2f}")
+                        st.write(f"**Date Range:** {performance_data[0].get('date', 'N/A')} to {performance_data[-1].get('date', 'N/A')}")
+                        
+                        # Show sample of first few records
+                        if len(performance_data) > 0:
+                            st.write("**Sample Records:**")
+                            sample_df = pd.DataFrame(performance_data[:5])
+                            st.dataframe(sample_df[['campaign_id', 'campaign_name', 'date', 'clicks', 'impressions', 'cost_micros']], hide_index=True)
+                else:
+                    st.warning("⚠️ No performance data returned from Google Ads API. This could mean:")
+                    st.write("- No campaigns have activity in the selected time range")
+                    st.write("- The API returned empty results")
+                    st.write("- Check your Google Ads account has active campaigns")
+                    st.write("- Try selecting a longer time range (Last 7 Days)")
+                
+                # Fetch keyword data (always fetch, not just when filter is set)
+                keyword_data = fetch_google_ads_keywords(
+                    campaign_id=campaign_id_filter,
+                    hours=view_hours,
+                    use_historical_data=False
+                )
+                
+                # Filter by keyword if specified
+                if selected_keyword != "All" and selected_keyword:
+                    keyword_data = [k for k in keyword_data if k.get('keyword', '').lower() == selected_keyword.lower()]
+                
+                if keyword_data:
+                    st.info(f"📊 Fetched {len(keyword_data)} keyword records from Google Ads API")
+                
+                # Fetch placement data (always fetch, not just when filter is set)
+                placement_data = fetch_google_ads_placements(
+                    campaign_id=campaign_id_filter,
+                    hours=view_hours,
+                    use_historical_data=False
+                )
+                
+                # Filter by placement if specified
+                if selected_target != "All" and selected_target:
+                    placement_data = [p for p in placement_data if p.get('placement_id', '') == selected_target]
+                
+                if placement_data:
+                    st.info(f"📍 Fetched {len(placement_data)} placement records from Google Ads API")
+                
+                # Convert API data to event format
+                api_events = _convert_google_ads_api_to_events(
+                    performance_data, 
+                    keyword_data, 
+                    placement_data,
+                    view_hours
+                )
+                
+                if api_events:
+                    st.success(f"🔄 Converted {len(api_events)} API records into events")
+                else:
+                    st.warning("⚠️ No events created from API data. Check if performance data has clicks > 0")
+                
+                # Get fraud detection events from DynamoDB to merge
+                fraud_events = get_google_ads_events(
+                    hours=view_hours,
+                    campaign_id=selected_campaign if selected_campaign != "All" else None,
+                    target_id=selected_target if selected_target != "All" else None,
+                    keyword=selected_keyword if selected_keyword != "All" else None,
+                    gclid=gclid_search.strip() if gclid_search and gclid_search.strip() else None,
+                    fraud_threshold=0.0  # Get all fraud events for merging
+                )
+                
+                # Merge API data with fraud detection data
+                events = _merge_api_data_with_fraud_events(api_events, fraud_events)
+                
+                # Apply fraud threshold filter
+                events = [e for e in events if float(e.get('fraud_score', 0.0)) >= fraud_threshold]
+                
+            except Exception as e:
+                import traceback
+                st.error(f"❌ Error fetching Google Ads API data: {str(e)}")
+                with st.expander("🔍 Error Details", expanded=False):
+                    st.code(traceback.format_exc())
+                st.info("Falling back to DynamoDB events only.")
+                events = get_google_ads_events(
+                    hours=view_hours,
+                    campaign_id=selected_campaign if selected_campaign != "All" else None,
+                    target_id=selected_target if selected_target != "All" else None,
+                    keyword=selected_keyword if selected_keyword != "All" else None,
+                    gclid=gclid_search.strip() if gclid_search and gclid_search.strip() else None,
+                    fraud_threshold=fraud_threshold
+                )
+        else:
+            # No API available, use DynamoDB events only
+            events = get_google_ads_events(
+                hours=view_hours,
+                campaign_id=selected_campaign if selected_campaign != "All" else None,
+                target_id=selected_target if selected_target != "All" else None,
+                keyword=selected_keyword if selected_keyword != "All" else None,
+                gclid=gclid_search.strip() if gclid_search and gclid_search.strip() else None,
+                fraud_threshold=fraud_threshold
+            )
     
     # Show "View in Event Detail" button if GCLID search found results
     if gclid_search and gclid_search.strip() and events:
@@ -1077,22 +1457,159 @@ def render_google_ads_view(hours: int):
             st.session_state.page = "Event Detail"
             st.rerun()
     
+    # Data Source Breakdown
+    if events:
+        st.divider()
+        st.subheader("📊 Data Source Breakdown")
+        
+        api_events = [e for e in events if e.get('source') == 'google_ads_api']
+        db_events = [e for e in events if e.get('source') == 'google_ads' or e.get('source') == 'regular']
+        
+        api_count = len(api_events)
+        db_count = len(db_events)
+        total_count = len(events)
+        
+        col1, col2, col3, col4 = st.columns(4)
+        
+        with col1:
+            st.metric(
+                "🌐 Google Ads API",
+                f"{api_count:,}",
+                help="Real-time data from Google Ads API (campaigns, clicks, impressions, cost, conversions)"
+            )
+        
+        with col2:
+            st.metric(
+                "💾 DynamoDB Events",
+                f"{db_count:,}",
+                help="Fraud detection events stored in DynamoDB"
+            )
+        
+        with col3:
+            st.metric(
+                "📈 Total Events",
+                f"{total_count:,}",
+                help="Combined events from both sources"
+            )
+        
+        with col4:
+            api_percentage = (api_count / total_count * 100) if total_count > 0 else 0
+            st.metric(
+                "API Coverage",
+                f"{api_percentage:.1f}%",
+                help="Percentage of events from Google Ads API"
+            )
+        
+        # Show detailed breakdown
+        with st.expander("🔍 Detailed Data Source Information", expanded=True):
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                st.markdown("### 🌐 Google Ads API Data")
+                if api_count > 0:
+                    # Calculate API metrics
+                    api_clicks = api_count
+                    api_impressions = sum(e.get('impressions', 0) for e in api_events if isinstance(e.get('impressions'), (int, float)))
+                    api_cost_micros = sum(e.get('cost_micros', 0) for e in api_events if isinstance(e.get('cost_micros'), (int, float)))
+                    api_conversions = sum(e.get('conversions', 0) for e in api_events if isinstance(e.get('conversions'), (int, float)))
+                    api_fraud_count = sum(1 for e in api_events if e.get('is_fraud', False))
+                    
+                    st.write(f"**Clicks:** {api_clicks:,}")
+                    st.write(f"**Impressions:** {int(api_impressions):,}")
+                    st.write(f"**Total Cost:** ${api_cost_micros / 1_000_000:.2f}")
+                    st.write(f"**Conversions:** {int(api_conversions):,}")
+                    st.write(f"**Fraud Detected:** {api_fraud_count:,} ({api_fraud_count / api_clicks * 100 if api_clicks > 0 else 0:.1f}%)")
+                    
+                    # Show unique campaigns from API
+                    api_campaigns = set(e.get('campaign_id', '') for e in api_events if e.get('campaign_id'))
+                    if api_campaigns:
+                        st.write(f"**Campaigns:** {len(api_campaigns)}")
+                        with st.expander("View Campaigns"):
+                            for camp_id in sorted(api_campaigns):
+                                camp_name = next((e.get('campaign_name', '') for e in api_events if e.get('campaign_id') == camp_id), '')
+                                st.write(f"- {camp_id}: {camp_name}")
+                else:
+                    st.info("No Google Ads API data in current view")
+            
+            with col2:
+                st.markdown("### 💾 DynamoDB Events")
+                if db_count > 0:
+                    db_fraud_count = sum(1 for e in db_events if e.get('is_fraud', False))
+                    db_legitimate_count = db_count - db_fraud_count
+                    
+                    st.write(f"**Total Events:** {db_count:,}")
+                    st.write(f"**Fraud Detected:** {db_fraud_count:,} ({db_fraud_count / db_count * 100 if db_count > 0 else 0:.1f}%)")
+                    st.write(f"**Legitimate:** {db_legitimate_count:,} ({db_legitimate_count / db_count * 100 if db_count > 0 else 0:.1f}%)")
+                    
+                    # Show fraud types
+                    fraud_types = {}
+                    for e in db_events:
+                        if e.get('is_fraud'):
+                            fraud_type = e.get('primary_fraud_type', 'unknown')
+                            fraud_types[fraud_type] = fraud_types.get(fraud_type, 0) + 1
+                    
+                    if fraud_types:
+                        st.write("**Fraud Types:**")
+                        for fraud_type, count in sorted(fraud_types.items(), key=lambda x: x[1], reverse=True):
+                            st.write(f"- {fraud_type}: {count}")
+                else:
+                    st.info("No DynamoDB events in current view")
+        
+        # Visual indicator in table
+        st.info(f"💡 **Tip:** Events marked with 🌐 are from Google Ads API. Events marked with 💾 are from DynamoDB fraud detection.")
+    
     # 4. Overview Metrics
     st.divider()
     st.subheader("Overview Metrics")
-    col1, col2, col3 = st.columns(3)
     
     total_clicks = len(events)
     fraud_count = sum(1 for e in events if e.get('is_fraud', False))
     fraud_rate = (fraud_count / total_clicks * 100) if total_clicks > 0 else 0.0
     blocked_count = sum(1 for e in events if e.get('is_fraud', False) and float(e.get('fraud_score', 0.0)) >= fraud_threshold)
     
-    with col1:
-        st.metric("Total Clicks", total_clicks)
-    with col2:
-        st.metric("Fraud Rate", f"{fraud_rate:.2f}%", delta=f"{fraud_count} events")
-    with col3:
-        st.metric("Blocked", blocked_count)
+    # Calculate API-specific metrics if available
+    api_events_count = sum(1 for e in events if e.get('source') == 'google_ads_api')
+    total_impressions = sum(e.get('impressions', 0) for e in events if isinstance(e.get('impressions'), (int, float)))
+    total_cost_micros = sum(e.get('cost_micros', 0) for e in events if isinstance(e.get('cost_micros'), (int, float)))
+    total_conversions = sum(e.get('conversions', 0) for e in events if isinstance(e.get('conversions'), (int, float)))
+    
+    if api_available and api_events_count > 0:
+        # Show expanded metrics for API data
+        col1, col2, col3, col4, col5 = st.columns(5)
+        
+        with col1:
+            st.metric("Total Clicks", total_clicks, help="From Google Ads API" if api_events_count > 0 else "From DynamoDB")
+        with col2:
+            st.metric("Impressions", f"{int(total_impressions):,}", help="From Google Ads API")
+        with col3:
+            st.metric("Fraud Rate", f"{fraud_rate:.2f}%", delta=f"{fraud_count} events")
+        with col4:
+            st.metric("Total Cost", f"${total_cost_micros / 1_000_000:.2f}", help="From Google Ads API")
+        with col5:
+            st.metric("Conversions", int(total_conversions), help="From Google Ads API")
+        
+        # Additional metrics row
+        col1, col2, col3 = st.columns(3)
+        ctr = (total_clicks / total_impressions * 100) if total_impressions > 0 else 0.0
+        conversion_rate = (total_conversions / total_clicks * 100) if total_clicks > 0 else 0.0
+        avg_cpc = (total_cost_micros / total_clicks / 1_000_000) if total_clicks > 0 else 0.0
+        
+        with col1:
+            st.metric("CTR", f"{ctr:.2f}%")
+        with col2:
+            st.metric("Conversion Rate", f"{conversion_rate:.2f}%")
+        with col3:
+            st.metric("Avg CPC", f"${avg_cpc:.2f}")
+    else:
+        # Standard metrics for DynamoDB-only data
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            st.metric("Total Clicks", total_clicks)
+        with col2:
+            st.metric("Fraud Rate", f"{fraud_rate:.2f}%", delta=f"{fraud_count} events")
+        with col3:
+            st.metric("Blocked", blocked_count)
     
     # 5. Event Table
     st.divider()
@@ -1110,49 +1627,113 @@ def render_google_ads_view(hours: int):
         gclid = event.get('gclid', '')
         gclid_display = gclid[:8] + "..." if len(gclid) > 8 else gclid
         
-        table_data.append({
-            'Timestamp': dt.strftime('%H:%M:%S'),
+        # Determine source
+        source = event.get('source', 'google_ads')
+        source_display = "🌐 API" if source == 'google_ads_api' else "💾 DB"
+        
+        row_data = {
+            'Source': source_display,
+            'Timestamp': dt.strftime('%Y-%m-%d %H:%M:%S'),
             'GCLID': gclid_display,
             'Full GCLID': gclid,
+            'Campaign': event.get('campaign_name', event.get('campaign_id', '')),
             'Keyword': event.get('keyword', ''),
             'Target': event.get('target_id', ''),
             'Fraud Score': f"{float(event.get('fraud_score', 0.0)):.2f}",
             'Is Fraud': "🚨 Fraud" if event.get('is_fraud', False) else "✅ Legitimate",
             'Event ID': event.get('event_id', ''),
             'Event': event  # Store full event for details
-        })
+        }
+        
+        # Add API-specific columns if available
+        if source == 'google_ads_api':
+            cost_micros = event.get('cost_micros', 0)
+            impressions = event.get('impressions', 0)
+            conversions = event.get('conversions', 0)
+            row_data.update({
+                'Cost': f"${cost_micros / 1_000_000:.2f}" if cost_micros > 0 else "$0.00",
+                'Impressions': f"{int(impressions):,}" if impressions > 0 else "0",
+                'Conversions': f"{int(conversions)}" if conversions > 0 else "0"
+            })
+        
+        table_data.append(row_data)
     
     df = pd.DataFrame(table_data)
     
-    # Display table
-    st.dataframe(
-        df[['Timestamp', 'GCLID', 'Keyword', 'Target', 'Fraud Score', 'Is Fraud']],
-        use_container_width=True,
-        hide_index=True
-    )
+    # Display table with appropriate columns
+    if api_available and api_events_count > 0:
+        # Show API columns
+        display_columns = ['Source', 'Timestamp', 'Campaign', 'Keyword', 'Target', 'Cost', 'Impressions', 'Conversions', 'Fraud Score', 'Is Fraud']
+        # Filter to only include columns that exist
+        display_columns = [col for col in display_columns if col in df.columns]
+        st.dataframe(
+            df[display_columns],
+            use_container_width=True,
+            hide_index=True
+        )
+    else:
+        # Standard columns for DynamoDB-only
+        display_columns = ['Timestamp', 'GCLID', 'Keyword', 'Target', 'Fraud Score', 'Is Fraud']
+        st.dataframe(
+            df[display_columns],
+            use_container_width=True,
+            hide_index=True
+        )
     
     # 6. Quick Event Summary (on row selection)
     st.divider()
     st.subheader("Event Details")
     
-    # Create selectbox for event selection
-    event_options = [f"{row['Timestamp']} - {row['GCLID']} ({row['Is Fraud']})" for row in table_data]
+    # Create selectbox for event selection with source indicator
+    event_options = [
+        f"{row['Source']} {row['Timestamp']} - {row['GCLID']} ({row['Is Fraud']})" 
+        for row in table_data
+    ]
     selected_index = st.selectbox("Select event to view details", range(len(event_options)), format_func=lambda x: event_options[x])
     
     if selected_index is not None and selected_index < len(table_data):
         selected_row = table_data[selected_index]
         selected_event = selected_row['Event']
         
+        # Show data source badge
+        event_source = selected_event.get('source', 'google_ads')
+        if event_source == 'google_ads_api':
+            st.success("🌐 **Data Source: Google Ads API** - Real-time data from your Google Ads account")
+        else:
+            st.info("💾 **Data Source: DynamoDB** - Fraud detection event from database")
+        
         col1, col2 = st.columns(2)
         
         with col1:
             st.write("**Event Information**")
             st.write(f"**Event ID:** {selected_event.get('event_id', 'N/A')}")
+            st.write(f"**Data Source:** {'🌐 Google Ads API' if event_source == 'google_ads_api' else '💾 DynamoDB'}")
             st.write(f"**Timestamp:** {datetime.fromtimestamp(selected_event.get('timestamp', 0), tz=timezone.utc).isoformat()}")
             st.write(f"**GCLID:** {selected_event.get('gclid', 'N/A')}")
+            st.write(f"**Campaign:** {selected_event.get('campaign_name', selected_event.get('campaign_id', 'N/A'))}")
+            st.write(f"**Campaign ID:** {selected_event.get('campaign_id', 'N/A')}")
             st.write(f"**Keyword:** {selected_event.get('keyword', 'N/A')}")
             st.write(f"**Target:** {selected_event.get('target_id', 'N/A')}")
-            st.write(f"**Campaign:** {selected_event.get('campaign_id', 'N/A')}")
+            if selected_event.get('ad_group_id'):
+                st.write(f"**Ad Group ID:** {selected_event.get('ad_group_id')}")
+            
+            # Show API-specific data if available
+            if event_source == 'google_ads_api':
+                st.markdown("---")
+                st.write("**Google Ads API Metrics:**")
+                cost_micros = selected_event.get('cost_micros', 0)
+                impressions = selected_event.get('impressions', 0)
+                conversions = selected_event.get('conversions', 0)
+                ctr = selected_event.get('ctr', 0.0)
+                
+                if cost_micros > 0:
+                    st.write(f"**Cost:** ${cost_micros / 1_000_000:.2f}")
+                if impressions > 0:
+                    st.write(f"**Impressions:** {int(impressions):,}")
+                if conversions > 0:
+                    st.write(f"**Conversions:** {int(conversions)}")
+                if ctr > 0:
+                    st.write(f"**CTR:** {ctr * 100:.2f}%")
         
         with col2:
             st.write("**Fraud Analysis**")
@@ -1160,9 +1741,24 @@ def render_google_ads_view(hours: int):
             fraud_score = float(selected_event.get('fraud_score', 0.0))
             st.write(f"**Fraud Status:** {'🚨 Fraud Detected' if is_fraud else '✅ Legitimate'}")
             st.write(f"**Fraud Score:** {fraud_score:.4f}")
-            st.write(f"**Fraud Type:** {selected_event.get('primary_fraud_type', 'unknown')}")
-            if selected_event.get('ad_group_id'):
-                st.write(f"**Ad Group ID:** {selected_event.get('ad_group_id')}")
+            st.write(f"**Fraud Type:** {selected_event.get('primary_fraud_type', 'legitimate' if not is_fraud else 'unknown')}")
+            
+            # Show fraud signals if available
+            fraud_signals = selected_event.get('fraud_signals', [])
+            if fraud_signals:
+                st.write("**Fraud Signals:**")
+                if isinstance(fraud_signals, list):
+                    for signal in fraud_signals:
+                        st.write(f"- 🚨 {signal}")
+                else:
+                    st.write(f"- {fraud_signals}")
+            
+            # Show reasoning if available
+            reasoning = selected_event.get('reasoning', '')
+            if reasoning:
+                st.markdown("---")
+                st.write("**AI Reasoning:**")
+                st.caption(reasoning)
         
         # View Full Details button
         if st.button("View Full Details", key="view_full_details"):
@@ -1394,6 +1990,36 @@ def main():
         }
         hours = hours_map[time_range]
         
+        # Cost Configuration
+        st.markdown("### Cost Configuration")
+        if 'cost_per_click' not in st.session_state:
+            st.session_state.cost_per_click = 0.50
+        
+        col1, col2, col3 = st.columns([2, 1, 1])
+        with col1:
+            cost_per_click = st.number_input(
+                "Cost per Click ($)",
+                min_value=0.0,
+                max_value=100.0,
+                value=st.session_state.cost_per_click,
+                step=0.01,
+                format="%.2f",
+                key="cost_input"
+            )
+            st.session_state.cost_per_click = cost_per_click
+        with col2:
+            st.markdown("<br>", unsafe_allow_html=True)  # Spacing
+            if st.button("➕", help="Increase", key="increase_cost"):
+                st.session_state.cost_per_click = min(100.0, st.session_state.cost_per_click + 0.01)
+                st.rerun()
+        with col3:
+            st.markdown("<br>", unsafe_allow_html=True)  # Spacing
+            if st.button("➖", help="Decrease", key="decrease_cost"):
+                st.session_state.cost_per_click = max(0.0, st.session_state.cost_per_click - 0.01)
+                st.rerun()
+        
+        cost_per_click = st.session_state.cost_per_click
+        
         # Refresh button
         if st.button("🔄 Refresh Data"):
             st.cache_data.clear()
@@ -1411,11 +2037,11 @@ def main():
     if page != "Google Ads View":
         with st.spinner("Loading events..."):
             events = get_recent_events(hours)
-            metrics = calculate_metrics(events)
+            metrics = calculate_metrics(events, cost_per_click)
     
     # Render selected page
     if page == "Real-Time Overview":
-        render_real_time_overview(events, metrics)
+        render_real_time_overview(events, metrics, cost_per_click)
     elif page == "Campaign Analysis":
         render_campaign_analysis(events, metrics)
     elif page == "Event Detail":
