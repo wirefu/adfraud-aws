@@ -959,11 +959,21 @@ def render_google_ads_view(hours: int):
     st.header("📊 Google Ads Analysis")
     
     # Check if Google Ads API is available
-    api_available = GOOGLE_ADS_API_AVAILABLE and get_google_ads_api_client() is not None
+    # Use a cached check to avoid repeated initialization attempts
+    if 'google_ads_api_checked' not in st.session_state:
+        try:
+            api_client = get_google_ads_api_client()
+            st.session_state.google_ads_api_available = api_client is not None
+            st.session_state.google_ads_api_checked = True
+        except:
+            st.session_state.google_ads_api_available = False
+            st.session_state.google_ads_api_checked = True
+    
+    api_available = GOOGLE_ADS_API_AVAILABLE and st.session_state.get('google_ads_api_available', False)
     
     if api_available:
         st.success("✅ Google Ads API connected - Showing real data from your Google Ads account")
-        with st.expander("📡 Google Ads API Data", expanded=True):
+        with st.expander("📡 Google Ads API Data", expanded=False):
             col1, col2 = st.columns(2)
             with col1:
                 if st.button("🔄 Refresh Google Ads Data", type="primary"):
@@ -971,6 +981,7 @@ def render_google_ads_view(hours: int):
                     st.rerun()
             with col2:
                 st.info("Data is cached for 5 minutes. Click refresh to update.")
+            st.caption("💡 Google Ads API data is filtered by the selected time range and includes timestamps for proper display.")
     else:
         st.warning("⚠️ Google Ads API not configured - Showing mock/fraud detection data only")
         st.info("💡 To see real Google Ads data, configure your credentials. See `GOOGLE_ADS_API_SETUP.md`")
