@@ -1,0 +1,26 @@
+# Google Ads API Credentials Configuration
+# Copy this file to google-ads.yaml and fill in your credentials
+
+# Developer Token (required)
+# Get from: https://ads.google.com/aw/apicenter
+developer_token: "YOUR_DEVELOPER_TOKEN_HERE"
+
+# Client ID and Secret (OAuth2 credentials)
+# Get from: https://console.cloud.google.com/apis/credentials
+client_id: "YOUR_CLIENT_ID_HERE.apps.googleusercontent.com"
+client_secret: "YOUR_CLIENT_SECRET_HERE"
+
+# Refresh Token (obtained through OAuth2 flow)
+# Run: python -m google.ads.googleads.oauth2 --client_id=YOUR_CLIENT_ID --client_secret=YOUR_CLIENT_SECRET
+refresh_token: "YOUR_REFRESH_TOKEN_HERE"
+
+# Customer ID (10-digit Google Ads account ID)
+# Format: 1234567890 (no dashes)
+login_customer_id: "YOUR_CUSTOMER_ID_HERE"
+
+# Optional: Use this customer ID for queries (can be different from login_customer_id)
+# customer_id: "YOUR_CUSTOMER_ID_HERE"
+
+# API Version (optional, defaults to latest)
+# use_proto_plus: True
+

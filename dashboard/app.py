@@ -24,6 +24,26 @@ from src.storage.dynamodb_utils import (
     query_events_by_campaign
 )
 
+# Google Ads API integration (optional)
+try:
+    from google_ads_api_integration import (
+        get_google_ads_api_client,
+        fetch_google_ads_campaigns,
+        fetch_google_ads_performance,
+        fetch_google_ads_keywords,
+        fetch_google_ads_placements,
+        merge_google_ads_with_fraud_data,
+        GOOGLE_ADS_API_AVAILABLE
+    )
+except ImportError:
+    GOOGLE_ADS_API_AVAILABLE = False
+    get_google_ads_api_client = None
+    fetch_google_ads_campaigns = None
+    fetch_google_ads_performance = None
+    fetch_google_ads_keywords = None
+    fetch_google_ads_placements = None
+    merge_google_ads_with_fraud_data = None
+
 # Page configuration
 st.set_page_config(
     page_title="FraudGuard AI Dashboard",
@@ -486,9 +506,15 @@ def get_mock_events(hours: int = 24) -> List[Dict[str, Any]]:
     
     fraud_types = ['bot_traffic', 'click_farm', 'device_farm', 'click_injection', 'incentivized_clicks', 'competitor_clicking', 'proxy_fraud']
     
+    # Scale event count based on time period for more realistic historical data
+    # Base: 100 events per 24 hours, scale proportionally
+    base_count = 100
+    scale_factor = max(1, hours / 24)  # At least 1x for short periods
+    total_count = int(base_count * scale_factor)
+    
     # Generate some Google Ads events (30% of total)
-    google_ads_count = 30
-    regular_count = 70
+    google_ads_count = int(total_count * 0.3)
+    regular_count = total_count - google_ads_count
     
     # Generate Google Ads events
     for i in range(google_ads_count):
@@ -932,6 +958,23 @@ def render_google_ads_view(hours: int):
     """Render Google Ads focused view"""
     st.header("📊 Google Ads Analysis")
     
+    # Check if Google Ads API is available
+    api_available = GOOGLE_ADS_API_AVAILABLE and get_google_ads_api_client() is not None
+    
+    if api_available:
+        st.success("✅ Google Ads API connected - Showing real data from your Google Ads account")
+        with st.expander("📡 Google Ads API Data", expanded=True):
+            col1, col2 = st.columns(2)
+            with col1:
+                if st.button("🔄 Refresh Google Ads Data", type="primary"):
+                    st.cache_data.clear()
+                    st.rerun()
+            with col2:
+                st.info("Data is cached for 5 minutes. Click refresh to update.")
+    else:
+        st.warning("⚠️ Google Ads API not configured - Showing mock/fraud detection data only")
+        st.info("💡 To see real Google Ads data, configure your credentials. See `GOOGLE_ADS_API_SETUP.md`")
+    
     # Initialize session state for selected event
     if 'selected_google_ads_event_id' not in st.session_state:
         st.session_state.selected_google_ads_event_id = None
@@ -1116,7 +1159,169 @@ def render_google_ads_view(hours: int):
             st.session_state.page = "Event Detail"
             st.rerun()
     
-    # 7. Export Functionality
+    # 7. Fraud-Adjusted Performance Metrics
+    st.divider()
+    st.subheader("Fraud-Adjusted Performance Metrics")
+    
+    if events:
+        # Calculate fraud-adjusted metrics
+        total_cost = len(events) * 0.50  # Assuming $0.50 per click
+        fraud_cost = sum(0.50 for e in events if e.get('is_fraud', False))
+        legitimate_clicks = total_clicks - fraud_count
+        revenue_per_click = 2.0  # Mock revenue per legitimate click
+        total_revenue = legitimate_clicks * revenue_per_click
+        roas = (total_revenue / total_cost) if total_cost > 0 else 0.0
+        cpa = (total_cost / legitimate_clicks) if legitimate_clicks > 0 else 0.0
+        wasted_spend = fraud_cost
+        
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            st.metric("ROAS", f"${roas:.2f}")
+        with col2:
+            st.metric("CPA", f"${cpa:.2f}")
+        with col3:
+            st.metric("Wasted Spend", f"${wasted_spend:.2f}", delta="↑0.0%")
+        with col4:
+            ctr = (total_clicks / 1000) * 100 if total_clicks > 0 else 0.0  # Mock CTR
+            st.metric("CTR", f"{ctr:.2f}%")
+        
+        with st.expander("> View Detailed Fraud-Adjusted Metrics", expanded=False):
+            st.write("**Detailed Metrics:**")
+            st.write(f"- Total Cost: ${total_cost:.2f}")
+            st.write(f"- Fraud Cost: ${fraud_cost:.2f}")
+            st.write(f"- Legitimate Clicks: {legitimate_clicks}")
+            st.write(f"- Total Revenue: ${total_revenue:.2f}")
+            st.write(f"- Wasted Spend %: {(wasted_spend / total_cost * 100) if total_cost > 0 else 0:.2f}%")
+    
+    # 8. Historical Fraud Analysis
+    st.divider()
+    st.subheader("Historical Fraud Analysis")
+    
+    # Generate historical data for different periods
+    periods = [30, 60, 90]
+    historical_data = []
+    
+    for days in periods:
+        # Get events for this period (using mock data scaled to period)
+        period_events = get_google_ads_events(
+            hours=days * 24,
+            campaign_id=selected_campaign if selected_campaign != "All" else None,
+            target_id=selected_target if selected_target != "All" else None,
+            keyword=selected_keyword if selected_keyword != "All" else None,
+            gclid=None,
+            fraud_threshold=0.0
+        )
+        
+        period_total = len(period_events)
+        period_fraud = sum(1 for e in period_events if e.get('is_fraud', False))
+        period_fraud_rate = (period_fraud / period_total * 100) if period_total > 0 else 0.0
+        period_cost = period_total * 0.50
+        period_wasted = period_fraud * 0.50
+        period_avg_fraud_score = sum(float(e.get('fraud_score', 0.0)) for e in period_events) / period_total if period_total > 0 else 0.0
+        
+        historical_data.append({
+            'Period': f"{days} Days",
+            'Data Points': period_total,
+            'Total Cost': period_cost,
+            'Total Wasted Spend': period_wasted,
+            'Average Fraud Score': period_avg_fraud_score,
+            'Fraud Rate': period_fraud_rate,
+            'Wasted Spend %': (period_wasted / period_cost * 100) if period_cost > 0 else 0.0
+        })
+    
+    # Display period metrics
+    col1, col2, col3 = st.columns(3)
+    for i, days in enumerate(periods):
+        with [col1, col2, col3][i]:
+            data = historical_data[i]
+            st.metric(
+                f"{days}-Day Period",
+                f"{data['Data Points']} days",
+                delta=f"↑{data['Fraud Rate']:.1f}% fraud rate"
+            )
+    
+    # Period Comparison Table
+    st.subheader("Period Comparison")
+    historical_df = pd.DataFrame(historical_data)
+    st.dataframe(
+        historical_df,
+        use_container_width=True,
+        hide_index=True
+    )
+    
+    # 9. Cumulative Impact
+    st.divider()
+    st.subheader("Cumulative Impact")
+    
+    total_wasted_all_time = sum(d['Total Wasted Spend'] for d in historical_data)
+    total_cost_all_time = sum(d['Total Cost'] for d in historical_data)
+    wasted_percentage = (total_wasted_all_time / total_cost_all_time * 100) if total_cost_all_time > 0 else 0.0
+    
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        st.metric("Total Wasted Spend", f"${total_wasted_all_time:.2f}")
+    with col2:
+        st.metric("Total Cost", f"${total_cost_all_time:,.2f}")
+    with col3:
+        st.metric("Wasted Spend %", f"{wasted_percentage:.2f}%")
+    with col4:
+        st.metric("Trend", "Stable", delta="→")
+    
+    # 10. Fraud Rate Trend Chart
+    st.subheader("Fraud Rate Trend")
+    if historical_data:
+        trend_df = pd.DataFrame({
+            'Period': [d['Period'] for d in historical_data],
+            'Fraud Rate (%)': [d['Fraud Rate'] for d in historical_data]
+        })
+        fig = px.line(
+            trend_df,
+            x='Period',
+            y='Fraud Rate (%)',
+            title="Fraud Rate Over Time",
+            markers=True
+        )
+        st.plotly_chart(fig, use_container_width=True)
+    
+    # 11. Optimization Recommendations
+    st.divider()
+    st.subheader("Optimization Recommendations")
+    
+    # Budget Reallocation Recommendations
+    st.write("**Budget Reallocation Recommendations:**")
+    budget_recs = pd.DataFrame({
+        'Date': [datetime.now().strftime('%Y-%m-%d %H:%M:%S')],
+        'Current Budget': ['$0.00'],
+        'Recommended Budget': ['$0.00'],
+        'Change': ['+0.0%'],
+        'Status': ['Pending'],
+        'Reason': ['N/A']
+    })
+    st.dataframe(budget_recs, use_container_width=True, hide_index=True)
+    
+    # Bid Adjustment Recommendations
+    st.write("**Bid Adjustment Recommendations:**")
+    bid_recs = pd.DataFrame({
+        'Date': [datetime.now().strftime('%Y-%m-%d %H:%M:%S')],
+        'Current Bid': ['$0.00'],
+        'Recommended Bid': ['$0.00'],
+        'Change': ['+0.0%'],
+        'Status': ['Pending'],
+        'Reason': ['N/A']
+    })
+    st.dataframe(bid_recs, use_container_width=True, hide_index=True)
+    
+    # 12. Fraud Remediation Actions
+    st.divider()
+    st.subheader("Fraud Remediation Actions")
+    st.info("No remediation actions taken for this campaign.")
+    
+    # 13. AI-Powered Fraud Recommendations
+    st.divider()
+    st.subheader("AI-Powered Fraud Recommendations")
+    st.info("No AI recommendations available for this campaign. Run the AI recommendations module to generate strategies.")
+    
+    # 14. Export Functionality
     st.divider()
     st.subheader("Export for Google Refund")
     

@@ -90,3 +90,6 @@ dmypy.json
 *.iml
 *.ipr
 *.iws
+google-ads.yaml
+.google-ads.yaml
+google_ads_credentials.json
