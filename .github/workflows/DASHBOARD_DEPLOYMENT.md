@@ -1,10 +1,10 @@
 # Dashboard Deployment Workflow
 
-This document explains the GitHub Actions workflow for deploying the Fraud Analytics Dashboard to AWS App Runner.
+This document explains the GitHub Actions workflow for deploying the Fraud Analytics Dashboard to AWS ECS with Application Load Balancer (ALB).
 
 ## Overview
 
-The dashboard deployment workflow (`dashboard-deploy.yml`) automatically builds, pushes, and deploys the Streamlit dashboard to AWS App Runner whenever dashboard code changes.
+The dashboard deployment workflow (`dashboard-deploy.yml`) automatically builds, pushes, and deploys the Streamlit dashboard to AWS ECS (Fargate) behind an Application Load Balancer whenever dashboard code changes. The ECS infrastructure is managed via CloudFormation in `template.yaml`.
 
 ## Workflow Triggers
 
@@ -46,21 +46,27 @@ You can manually trigger the workflow:
 - Pushes image to ECR repository
 - Both versioned and `latest` tags are pushed
 
-### 6. Get App Runner Service ARN
-- Checks if App Runner service exists
-- Retrieves service ARN if found
+### 6. Get ECS Cluster and Service Info
+- Retrieves ECS cluster, service, and task definition from CloudFormation stack
+- Extracts resource names and ARNs
 
-### 7. Create or Update App Runner Service
-- **If service doesn't exist**: Creates new App Runner service
-- **If service exists**: Starts new deployment with updated image
+### 7. Register New ECS Task Definition
+- Gets current task definition
+- Updates with new Docker image URI
+- Registers new task definition revision
 
-### 8. Wait for Deployment
-- Waits for deployment to complete
-- Monitors service status
+### 8. Update ECS Service
+- Updates ECS service with new task definition
+- Forces new deployment to pick up updated image
+- Service performs rolling update
 
-### 9. Get Service URL
-- Retrieves the App Runner service URL
-- Displays in workflow summary
+### 9. Wait for Service to Stabilize
+- Waits for ECS service to reach stable state
+- Ensures new tasks are healthy before completing
+
+### 10. Get ALB URL
+- Retrieves Application Load Balancer DNS name from CloudFormation outputs
+- Displays dashboard URL in workflow summary
 
 ## Configuration
 
@@ -70,7 +76,7 @@ The workflow uses these environment variables:
 
 - `AWS_REGION`: AWS region (default: `us-east-1`)
 - `ECR_REPOSITORY`: ECR repository name (default: `fraudguard-dashboard`)
-- `APP_RUNNER_SERVICE`: App Runner service name (default: `fraudguard-dashboard`)
+- `STACK_NAME`: CloudFormation stack name (default: `fraudguard-ai`)
 
 ### Environment-Specific Configuration
 
@@ -84,7 +90,6 @@ Each environment has different DynamoDB table names:
 
 1. **AWS_ACCESS_KEY_ID**: AWS access key ID
 2. **AWS_SECRET_ACCESS_KEY**: AWS secret access key
-3. **APP_RUNNER_AUTO_SCALING_ARN** (optional): Auto-scaling configuration ARN
 
 ### Required AWS Resources
 
@@ -93,12 +98,18 @@ Each environment has different DynamoDB table names:
    aws ecr create-repository --repository-name fraudguard-dashboard --region us-east-1
    ```
 
-2. **App Runner Service**: Created automatically on first deployment
+2. **CloudFormation Stack**: Must be deployed with dashboard resources
+   - ECS Cluster (`DashboardCluster`)
+   - ECS Service (`DashboardService`)
+   - Application Load Balancer (`DashboardALB`)
+   - Task Definition (`DashboardTaskDefinition`)
+   - IAM Roles and Security Groups
 
 3. **IAM Permissions**: The AWS credentials need:
    - `ecr:*` permissions for the ECR repository
-   - `apprunner:*` permissions
-   - `iam:PassRole` for App Runner service role
+   - `ecs:*` permissions for ECS service updates
+   - `cloudformation:DescribeStacks` to read stack outputs
+   - `elasticloadbalancing:DescribeTargetGroups` for health checks
 
 ## Setup Instructions
 
@@ -112,15 +123,30 @@ aws ecr create-repository \
   --encryption-configuration encryptionType=AES256
 ```
 
-### 2. Configure GitHub Secrets
+### 2. Deploy CloudFormation Stack
+
+Deploy the main CloudFormation stack that includes dashboard resources:
+
+```bash
+sam deploy --stack-name fraudguard-ai --parameter-overrides Environment=dev
+```
+
+This creates:
+- ECS Cluster and Service
+- Application Load Balancer
+- Task Definition
+- IAM Roles
+- Security Groups
+- CloudWatch Log Groups
+
+### 3. Configure GitHub Secrets
 
 Go to GitHub repository → Settings → Secrets and variables → Actions:
 
 1. Add `AWS_ACCESS_KEY_ID`
 2. Add `AWS_SECRET_ACCESS_KEY`
-3. Add `APP_RUNNER_AUTO_SCALING_ARN` (optional)
 
-### 3. Create IAM User/Role
+### 4. Create IAM User/Role
 
 Create an IAM user or role with these permissions:
 
@@ -145,31 +171,40 @@ Create an IAM user or role with these permissions:
     {
       "Effect": "Allow",
       "Action": [
-        "apprunner:CreateService",
-        "apprunner:DescribeService",
-        "apprunner:ListServices",
-        "apprunner:StartDeployment",
-        "apprunner:UpdateService"
+        "ecs:DescribeServices",
+        "ecs:DescribeTaskDefinition",
+        "ecs:RegisterTaskDefinition",
+        "ecs:UpdateService"
       ],
       "Resource": "*"
     },
     {
       "Effect": "Allow",
       "Action": [
-        "iam:PassRole"
+        "cloudformation:DescribeStacks",
+        "cloudformation:DescribeStackResources"
       ],
-      "Resource": "arn:aws:iam::*:role/service-role/*"
+      "Resource": "*"
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "elasticloadbalancing:DescribeTargetGroups",
+        "elasticloadbalancing:DescribeTargetHealth"
+      ],
+      "Resource": "*"
     }
   ]
 }
 ```
 
-### 4. Test Deployment
+### 5. Test Deployment
 
 1. Make a change to `dashboard/app.py`
 2. Commit and push to `main` or `develop`
 3. Check GitHub Actions tab for workflow execution
-4. Verify deployment in AWS App Runner console
+4. Verify deployment in AWS ECS console
+5. Access dashboard at ALB URL from CloudFormation outputs
 
 ## Troubleshooting
 
@@ -188,31 +223,32 @@ aws ecr create-repository --repository-name fraudguard-dashboard --region us-eas
 
 **Solution:**
 - Verify AWS credentials in GitHub secrets
-- Check IAM permissions include ECR and App Runner access
+- Check IAM permissions include ECR and ECS access
 - Ensure IAM user has `iam:PassRole` permission
 
-### Workflow Fails: App Runner Service Creation Failed
+### Workflow Fails: ECS Service Not Found
 
-**Error:** Service creation fails
+**Error:** `ServiceNotFoundException` or task definition not found
 
 **Solution:**
-- Check if service name already exists
-- Verify auto-scaling configuration ARN (if provided)
-- Check App Runner service quotas
+- Ensure CloudFormation stack is deployed with dashboard resources
+- Verify stack name matches `STACK_NAME` in workflow (default: `fraudguard-ai`)
+- Check that ECS cluster and service exist in the stack
 
 ### Deployment Takes Too Long
 
 **Solution:**
-- App Runner deployments typically take 5-10 minutes
-- The workflow waits up to 30 attempts (5 minutes)
-- Check App Runner console for deployment status
+- ECS deployments typically take 2-5 minutes
+- The workflow waits for service to stabilize
+- Check ECS console for task status
+- Verify ALB target health is healthy
 
 ### Service URL Not Retrieved
 
 **Solution:**
-- Deployment may still be in progress
-- Check App Runner console manually
-- Service URL will be available once deployment completes
+- Verify CloudFormation stack has `DashboardALBDNS` output
+- Check ALB is in active state
+- Ensure ECS tasks are running and healthy
 
 ## Monitoring
 
@@ -222,24 +258,31 @@ aws ecr create-repository --repository-name fraudguard-dashboard --region us-eas
 - Check workflow logs for detailed output
 - Review deployment summary in workflow run
 
-### AWS App Runner Console
+### AWS ECS Console
 
-- Monitor service status
-- View deployment history
-- Check service logs
-- Monitor metrics and alarms
+- Monitor service status and running tasks
+- View task definition revisions
+- Check service events and deployments
+- View task logs
+
+### AWS Application Load Balancer
+
+- Monitor target health
+- View request metrics
+- Check access logs
 
 ### CloudWatch
 
-- App Runner service logs: `/aws/apprunner/fraudguard-dashboard-{env}/service/application`
+- ECS service logs: `/ecs/fraudguard-ai-dashboard`
 - Service metrics: CPU, memory, request count, latency
+- ALB metrics: request count, response time, error rates
 
 ## Best Practices
 
 1. **Test Locally First**: Test dashboard changes locally before pushing
 2. **Use Feature Branches**: Test on feature branches before merging to main
 3. **Monitor Deployments**: Check deployment status after each push
-4. **Review Logs**: Check App Runner logs if dashboard doesn't work
+4. **Review Logs**: Check ECS task logs and ALB access logs if dashboard doesn't work
 5. **Environment Separation**: Use different environments for dev/staging/prod
 
 ## Next Steps

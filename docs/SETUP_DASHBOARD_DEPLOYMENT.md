@@ -43,8 +43,7 @@ chmod +x setup_github_secrets.sh
 - `AWS_ACCESS_KEY_ID` - Your AWS access key ID
 - `AWS_SECRET_ACCESS_KEY` - Your AWS secret access key
 
-**Optional:**
-- `APP_RUNNER_AUTO_SCALING_ARN` - App Runner auto-scaling configuration ARN
+**Note:** The dashboard deploys to ECS/ALB, not App Runner. No additional secrets needed.
 
 #### Option C: Using GitHub CLI Manually
 
@@ -53,8 +52,7 @@ chmod +x setup_github_secrets.sh
 gh secret set AWS_ACCESS_KEY_ID --body "YOUR_ACCESS_KEY_ID"
 gh secret set AWS_SECRET_ACCESS_KEY --body "YOUR_SECRET_ACCESS_KEY"
 
-# Optional: Set auto-scaling ARN
-gh secret set APP_RUNNER_AUTO_SCALING_ARN --body "YOUR_AUTO_SCALING_ARN"
+# No additional secrets needed for ECS/ALB deployment
 ```
 
 ### 3. Create IAM User for GitHub Actions
@@ -87,7 +85,8 @@ After setup, test the deployment:
 1. Make a change to `dashboard/app.py`
 2. Commit and push to `main` or `develop`
 3. Check GitHub Actions tab for workflow execution
-4. Verify deployment in AWS App Runner console
+4. Verify deployment in AWS ECS console
+5. Access dashboard at ALB URL from CloudFormation stack outputs
 
 ## Troubleshooting
 

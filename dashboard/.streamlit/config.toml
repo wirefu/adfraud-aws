@@ -1,6 +1,6 @@
 [server]
 # App Runner compatibility settings
-enableXsrfProtection = true
+enableXsrfProtection = false
 enableCORS = true
 maxUploadSize = 200
 maxMessageSize = 200
