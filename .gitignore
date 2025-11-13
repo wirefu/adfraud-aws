@@ -96,3 +96,10 @@ google_ads_credentials.json
 secrets.json
 .secrets.json
 packaged-template.yaml
+
+# Terraform
+.terraform/
+terraform/.terraform/
+*.tfstate
+*.tfstate.*
+.terraform.lock.hcl
