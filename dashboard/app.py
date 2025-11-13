@@ -32,6 +32,9 @@ try:
         fetch_google_ads_performance,
         fetch_google_ads_keywords,
         fetch_google_ads_placements,
+        fetch_google_ads_optimization_scores,
+        fetch_google_ads_quality_scores,
+        fetch_google_ads_recommendations,
         merge_google_ads_with_fraud_data,
         GOOGLE_ADS_API_AVAILABLE
     )
@@ -42,6 +45,9 @@ except ImportError:
     fetch_google_ads_performance = None
     fetch_google_ads_keywords = None
     fetch_google_ads_placements = None
+    fetch_google_ads_optimization_scores = None
+    fetch_google_ads_quality_scores = None
+    fetch_google_ads_recommendations = None
     merge_google_ads_with_fraud_data = None
 
 # Page configuration
@@ -191,15 +197,16 @@ def get_google_ads_events(
             # Priority 4: Campaign filter
             events = query_events_by_campaign(TABLE_NAME, campaign_id.strip(), start_timestamp, end_timestamp)
         else:
-            # Priority 5: Scan table with source filter
+            # Priority 5: Scan table with source filter - include both google_ads and google_ads_api
             response = table.scan(
-                FilterExpression='#src = :source AND #ts >= :start AND #ts <= :end',
+                FilterExpression='(#src = :source1 OR #src = :source2) AND #ts >= :start AND #ts <= :end',
                 ExpressionAttributeNames={
                     '#src': 'source',
                     '#ts': 'timestamp'
                 },
                 ExpressionAttributeValues={
-                    ':source': 'google_ads',
+                    ':source1': 'google_ads',
+                    ':source2': 'google_ads_api',
                     ':start': start_timestamp,
                     ':end': end_timestamp
                 }
@@ -209,13 +216,14 @@ def get_google_ads_events(
             # Handle pagination
             while 'LastEvaluatedKey' in response:
                 response = table.scan(
-                    FilterExpression='#src = :source AND #ts >= :start AND #ts <= :end',
+                    FilterExpression='(#src = :source1 OR #src = :source2) AND #ts >= :start AND #ts <= :end',
                     ExpressionAttributeNames={
                         '#src': 'source',
                         '#ts': 'timestamp'
                     },
                     ExpressionAttributeValues={
-                        ':source': 'google_ads',
+                        ':source1': 'google_ads',
+                        ':source2': 'google_ads_api',
                         ':start': start_timestamp,
                         ':end': end_timestamp
                     },
@@ -226,8 +234,9 @@ def get_google_ads_events(
         # Post-query filtering
         filtered_events = []
         for event in events:
-            # Filter by source
-            if event.get('source') != 'google_ads':
+            # Filter by source - include both 'google_ads' and 'google_ads_api' sources
+            source = event.get('source', '')
+            if source not in ['google_ads', 'google_ads_api']:
                 continue
             
             # Filter by fraud threshold
@@ -312,13 +321,14 @@ def get_unique_google_ads_campaigns(table_name: str, hours: int) -> List[str]:
         start_timestamp = int((now - timedelta(hours=hours)).timestamp())
         
         response = table.scan(
-            FilterExpression='#src = :source AND #ts >= :start',
+            FilterExpression='(#src = :source1 OR #src = :source2) AND #ts >= :start',
             ExpressionAttributeNames={
                 '#src': 'source',
                 '#ts': 'timestamp'
             },
             ExpressionAttributeValues={
-                ':source': 'google_ads',
+                ':source1': 'google_ads',
+                ':source2': 'google_ads_api',
                 ':start': start_timestamp
             },
             ProjectionExpression='campaign_id'
@@ -332,13 +342,14 @@ def get_unique_google_ads_campaigns(table_name: str, hours: int) -> List[str]:
         # Handle pagination
         while 'LastEvaluatedKey' in response:
             response = table.scan(
-                FilterExpression='#src = :source AND #ts >= :start',
+                FilterExpression='(#src = :source1 OR #src = :source2) AND #ts >= :start',
                 ExpressionAttributeNames={
                     '#src': 'source',
                     '#ts': 'timestamp'
                 },
                 ExpressionAttributeValues={
-                    ':source': 'google_ads',
+                    ':source1': 'google_ads',
+                    ':source2': 'google_ads_api',
                     ':start': start_timestamp
                 },
                 ProjectionExpression='campaign_id',
@@ -371,13 +382,14 @@ def get_unique_google_ads_targets(table_name: str, hours: int) -> List[str]:
         start_timestamp = int((now - timedelta(hours=hours)).timestamp())
         
         response = table.scan(
-            FilterExpression='#src = :source AND #ts >= :start',
+            FilterExpression='(#src = :source1 OR #src = :source2) AND #ts >= :start',
             ExpressionAttributeNames={
                 '#src': 'source',
                 '#ts': 'timestamp'
             },
             ExpressionAttributeValues={
-                ':source': 'google_ads',
+                ':source1': 'google_ads',
+                ':source2': 'google_ads_api',
                 ':start': start_timestamp
             },
             ProjectionExpression='target_id'
@@ -391,13 +403,14 @@ def get_unique_google_ads_targets(table_name: str, hours: int) -> List[str]:
         # Handle pagination
         while 'LastEvaluatedKey' in response:
             response = table.scan(
-                FilterExpression='#src = :source AND #ts >= :start',
+                FilterExpression='(#src = :source1 OR #src = :source2) AND #ts >= :start',
                 ExpressionAttributeNames={
                     '#src': 'source',
                     '#ts': 'timestamp'
                 },
                 ExpressionAttributeValues={
-                    ':source': 'google_ads',
+                    ':source1': 'google_ads',
+                    ':source2': 'google_ads_api',
                     ':start': start_timestamp
                 },
                 ProjectionExpression='target_id',
@@ -430,13 +443,14 @@ def get_unique_google_ads_keywords(table_name: str, hours: int) -> List[str]:
         start_timestamp = int((now - timedelta(hours=hours)).timestamp())
         
         response = table.scan(
-            FilterExpression='#src = :source AND #ts >= :start',
+            FilterExpression='(#src = :source1 OR #src = :source2) AND #ts >= :start',
             ExpressionAttributeNames={
                 '#src': 'source',
                 '#ts': 'timestamp'
             },
             ExpressionAttributeValues={
-                ':source': 'google_ads',
+                ':source1': 'google_ads',
+                ':source2': 'google_ads_api',
                 ':start': start_timestamp
             },
             ProjectionExpression='keyword'
@@ -450,13 +464,14 @@ def get_unique_google_ads_keywords(table_name: str, hours: int) -> List[str]:
         # Handle pagination
         while 'LastEvaluatedKey' in response:
             response = table.scan(
-                FilterExpression='#src = :source AND #ts >= :start',
+                FilterExpression='(#src = :source1 OR #src = :source2) AND #ts >= :start',
                 ExpressionAttributeNames={
                     '#src': 'source',
                     '#ts': 'timestamp'
                 },
                 ExpressionAttributeValues={
-                    ':source': 'google_ads',
+                    ':source1': 'google_ads',
+                    ':source2': 'google_ads_api',
                     ':start': start_timestamp
                 },
                 ProjectionExpression='keyword',
@@ -1220,15 +1235,88 @@ def _merge_api_data_with_fraud_events(
     return merged_events
 
 
+def get_stored_historical_events(
+    hours: int,
+    campaign_id: Optional[str] = None,
+    target_id: Optional[str] = None,
+    keyword: Optional[str] = None,
+    gclid: Optional[str] = None,
+    fraud_threshold: float = 0.0
+) -> List[Dict[str, Any]]:
+    """
+    Get stored historical Google Ads events from DynamoDB
+    These are events that were imported from Nov 2023-2024 and shifted forward
+    
+    Args:
+        hours: Number of hours to look back
+        campaign_id: Campaign ID filter
+        target_id: Target ID filter
+        keyword: Keyword filter
+        gclid: GCLID search string
+        fraud_threshold: Minimum fraud score
+    
+    Returns:
+        List of historical events from DynamoDB
+    """
+    if not table:
+        return []
+    
+    try:
+        # Calculate timestamp range
+        now = datetime.now(timezone.utc)
+        start_timestamp = int((now - timedelta(hours=hours)).timestamp())
+        end_timestamp = int(now.timestamp())
+        
+        events = []
+        
+        # Query for historical events (source = 'google_ads_api' or has 'shifted_date')
+        # Priority: GCLID > Keyword > Target > Campaign > All
+        
+        if gclid and gclid.strip():
+            events = query_events_by_gclid(TABLE_NAME, gclid.strip(), start_timestamp, end_timestamp)
+        elif keyword and keyword != "All" and keyword.strip():
+            events = query_events_by_keyword(TABLE_NAME, keyword.strip(), start_timestamp, end_timestamp)
+        elif target_id and target_id != "All" and target_id.strip():
+            events = query_events_by_target(TABLE_NAME, target_id.strip(), start_timestamp, end_timestamp)
+        elif campaign_id and campaign_id != "All":
+            events = query_events_by_campaign(TABLE_NAME, campaign_id, start_timestamp, end_timestamp)
+        else:
+            # Query all events in time range - scan is expensive, so we'll use campaign query if possible
+            # For now, return empty and let API fetch handle it
+            events = []
+        
+        # Filter for historical/stored API events
+        historical_events = [
+            e for e in events 
+            if e.get('source') == 'google_ads_api' or 'shifted_date' in e or 'original_date' in e
+        ]
+        
+        # Apply fraud threshold
+        if fraud_threshold > 0.0:
+            historical_events = [
+                e for e in historical_events 
+                if float(e.get('fraud_score', 0.0)) >= fraud_threshold
+            ]
+        
+        return historical_events
+    
+    except Exception as e:
+        print(f"Error getting stored historical events: {str(e)}")
+        return []
+
+
 def render_google_ads_view(hours: int):
     """Render Google Ads focused view"""
     st.header("📊 Google Ads Analysis")
     
-    # Check if Google Ads API is available
-    # Use a cached check to avoid repeated initialization attempts
+    # Always use DynamoDB as the data source
+    st.success("✅ Using DynamoDB as data source - Showing all Google Ads events from database")
+    st.info("💡 All data is pulled from DynamoDB, including historical Google Ads data and real-time tracking events.")
+    
+    # Check if Google Ads API is available for optimization data
     if 'google_ads_api_checked' not in st.session_state:
         try:
-            api_client = get_google_ads_api_client()
+            api_client = get_google_ads_api_client() if get_google_ads_api_client else None
             st.session_state.google_ads_api_available = api_client is not None
             st.session_state.google_ads_api_checked = True
         except:
@@ -1237,20 +1325,85 @@ def render_google_ads_view(hours: int):
     
     api_available = GOOGLE_ADS_API_AVAILABLE and st.session_state.get('google_ads_api_available', False)
     
-    if api_available:
-        st.success("✅ Google Ads API connected - Showing real data from your Google Ads account")
-        with st.expander("📡 Google Ads API Data", expanded=False):
-            col1, col2 = st.columns(2)
-            with col1:
-                if st.button("🔄 Refresh Google Ads Data", type="primary"):
-                    st.cache_data.clear()
-                    st.rerun()
-            with col2:
-                st.info("Data is cached for 5 minutes. Click refresh to update.")
-            st.caption("💡 Google Ads API data is filtered by the selected time range and includes timestamps for proper display.")
-    else:
-        st.warning("⚠️ Google Ads API not configured - Showing mock/fraud detection data only")
-        st.info("💡 To see real Google Ads data, configure your credentials. See `GOOGLE_ADS_API_SETUP.md`")
+    # Optimization Data Section (if API is available)
+    if api_available and fetch_google_ads_optimization_scores:
+        with st.expander("🎯 Optimization Data from Google Ads API", expanded=False):
+            st.subheader("Campaign Optimization Scores")
+            
+            try:
+                optimization_scores = fetch_google_ads_optimization_scores()
+                if optimization_scores:
+                    scores_df = pd.DataFrame(optimization_scores)
+                    st.dataframe(scores_df, use_container_width=True, hide_index=True)
+                    
+                    # Summary metrics
+                    scores_with_values = scores_df[scores_df['optimization_score'].notna()] if 'optimization_score' in scores_df.columns else pd.DataFrame()
+                    if not scores_with_values.empty:
+                        avg_score = scores_with_values['optimization_score'].mean()
+                        max_score = scores_with_values['optimization_score'].max()
+                        min_score = scores_with_values['optimization_score'].min()
+                        
+                        col1, col2, col3 = st.columns(3)
+                        with col1:
+                            st.metric("Average Optimization Score", f"{avg_score:.1f}%")
+                        with col2:
+                            st.metric("Max Optimization Score", f"{max_score:.1f}%")
+                        with col3:
+                            st.metric("Min Optimization Score", f"{min_score:.1f}%")
+                else:
+                    st.info("No optimization scores available")
+            except Exception as e:
+                st.warning(f"Could not fetch optimization scores: {str(e)}")
+            
+            st.divider()
+            st.subheader("Keyword Quality Scores")
+            
+            try:
+                quality_scores = fetch_google_ads_quality_scores(days=30)
+                if quality_scores:
+                    # Filter to show top keywords by quality score
+                    quality_df = pd.DataFrame(quality_scores)
+                    quality_df = quality_df.sort_values('quality_score', ascending=False, na_position='last').head(50)
+                    
+                    # Select relevant columns for display
+                    display_cols = ['campaign_name', 'ad_group_name', 'keyword', 'match_type', 
+                                   'quality_score', 'creative_quality_score', 'landing_page_quality_score', 
+                                   'expected_ctr', 'impressions', 'clicks', 'ctr', 'conversions']
+                    display_cols = [col for col in display_cols if col in quality_df.columns]
+                    
+                    st.dataframe(quality_df[display_cols], use_container_width=True, hide_index=True)
+                    
+                    # Quality score distribution
+                    if 'quality_score' in quality_df.columns:
+                        quality_df_filtered = quality_df[quality_df['quality_score'].notna()]
+                        if not quality_df_filtered.empty:
+                            avg_quality = quality_df_filtered['quality_score'].mean()
+                            st.metric("Average Quality Score", f"{avg_quality:.1f}/10")
+                else:
+                    st.info("No quality score data available")
+            except Exception as e:
+                st.warning(f"Could not fetch quality scores: {str(e)}")
+            
+            st.divider()
+            st.subheader("Optimization Recommendations")
+            
+            try:
+                recommendations = fetch_google_ads_recommendations()
+                if recommendations:
+                    recs_df = pd.DataFrame(recommendations)
+                    st.dataframe(recs_df, use_container_width=True, hide_index=True)
+                    
+                    # Count by recommendation type
+                    if 'recommendation_type' in recs_df.columns:
+                        rec_counts = recs_df['recommendation_type'].value_counts()
+                        st.write("**Recommendations by Type:**")
+                        st.bar_chart(rec_counts)
+                else:
+                    st.info("No recommendations available")
+            except Exception as e:
+                st.warning(f"Could not fetch recommendations: {str(e)}")
+    elif api_available == False:
+        st.info("💡 To see optimization data (quality scores, recommendations), configure your Google Ads API credentials.")
     
     # Initialize session state for selected event
     if 'selected_google_ads_event_id' not in st.session_state:
@@ -1325,130 +1478,23 @@ def render_google_ads_view(hours: int):
             step=0.05
         )
     
-    # Load Google Ads events
-    with st.spinner("Loading Google Ads events..."):
-        # Try to fetch real Google Ads API data first
-        api_events = []
-        if api_available:
-            try:
-                # Fetch performance data from Google Ads API
-                campaign_id_filter = selected_campaign if selected_campaign != "All" else None
-                
-                # Fetch performance data
-                performance_data = fetch_google_ads_performance(
-                    campaign_id=campaign_id_filter,
-                    hours=view_hours,
-                    use_historical_data=False
-                )
-                
-                # Debug: Show what we got from API
-                if performance_data:
-                    st.success(f"✅ Fetched {len(performance_data)} performance records from Google Ads API")
-                    
-                    # Show summary of performance data
-                    total_clicks = sum(p.get('clicks', 0) for p in performance_data)
-                    total_cost = sum(p.get('cost_micros', 0) for p in performance_data) / 1_000_000
-                    total_impressions = sum(p.get('impressions', 0) for p in performance_data)
-                    
-                    with st.expander("📊 API Performance Data Summary", expanded=False):
-                        st.write(f"**Total Clicks:** {total_clicks:,}")
-                        st.write(f"**Total Impressions:** {total_impressions:,}")
-                        st.write(f"**Total Cost:** ${total_cost:.2f}")
-                        st.write(f"**Date Range:** {performance_data[0].get('date', 'N/A')} to {performance_data[-1].get('date', 'N/A')}")
-                        
-                        # Show sample of first few records
-                        if len(performance_data) > 0:
-                            st.write("**Sample Records:**")
-                            sample_df = pd.DataFrame(performance_data[:5])
-                            st.dataframe(sample_df[['campaign_id', 'campaign_name', 'date', 'clicks', 'impressions', 'cost_micros']], hide_index=True)
-                else:
-                    st.warning("⚠️ No performance data returned from Google Ads API. This could mean:")
-                    st.write("- No campaigns have activity in the selected time range")
-                    st.write("- The API returned empty results")
-                    st.write("- Check your Google Ads account has active campaigns")
-                    st.write("- Try selecting a longer time range (Last 7 Days)")
-                
-                # Fetch keyword data (always fetch, not just when filter is set)
-                keyword_data = fetch_google_ads_keywords(
-                    campaign_id=campaign_id_filter,
-                    hours=view_hours,
-                    use_historical_data=False
-                )
-                
-                # Filter by keyword if specified
-                if selected_keyword != "All" and selected_keyword:
-                    keyword_data = [k for k in keyword_data if k.get('keyword', '').lower() == selected_keyword.lower()]
-                
-                if keyword_data:
-                    st.info(f"📊 Fetched {len(keyword_data)} keyword records from Google Ads API")
-                
-                # Fetch placement data (always fetch, not just when filter is set)
-                placement_data = fetch_google_ads_placements(
-                    campaign_id=campaign_id_filter,
-                    hours=view_hours,
-                    use_historical_data=False
-                )
-                
-                # Filter by placement if specified
-                if selected_target != "All" and selected_target:
-                    placement_data = [p for p in placement_data if p.get('placement_id', '') == selected_target]
-                
-                if placement_data:
-                    st.info(f"📍 Fetched {len(placement_data)} placement records from Google Ads API")
-                
-                # Convert API data to event format
-                api_events = _convert_google_ads_api_to_events(
-                    performance_data, 
-                    keyword_data, 
-                    placement_data,
-                    view_hours
-                )
-                
-                if api_events:
-                    st.success(f"🔄 Converted {len(api_events)} API records into events")
-                else:
-                    st.warning("⚠️ No events created from API data. Check if performance data has clicks > 0")
-                
-                # Get fraud detection events from DynamoDB to merge
-                fraud_events = get_google_ads_events(
-                    hours=view_hours,
-                    campaign_id=selected_campaign if selected_campaign != "All" else None,
-                    target_id=selected_target if selected_target != "All" else None,
-                    keyword=selected_keyword if selected_keyword != "All" else None,
-                    gclid=gclid_search.strip() if gclid_search and gclid_search.strip() else None,
-                    fraud_threshold=0.0  # Get all fraud events for merging
-                )
-                
-                # Merge API data with fraud detection data
-                events = _merge_api_data_with_fraud_events(api_events, fraud_events)
-                
-                # Apply fraud threshold filter
-                events = [e for e in events if float(e.get('fraud_score', 0.0)) >= fraud_threshold]
-                
-            except Exception as e:
-                import traceback
-                st.error(f"❌ Error fetching Google Ads API data: {str(e)}")
-                with st.expander("🔍 Error Details", expanded=False):
-                    st.code(traceback.format_exc())
-                st.info("Falling back to DynamoDB events only.")
-                events = get_google_ads_events(
-                    hours=view_hours,
-                    campaign_id=selected_campaign if selected_campaign != "All" else None,
-                    target_id=selected_target if selected_target != "All" else None,
-                    keyword=selected_keyword if selected_keyword != "All" else None,
-                    gclid=gclid_search.strip() if gclid_search and gclid_search.strip() else None,
-                    fraud_threshold=fraud_threshold
-                )
-        else:
-            # No API available, use DynamoDB events only
-            events = get_google_ads_events(
-                hours=view_hours,
-                campaign_id=selected_campaign if selected_campaign != "All" else None,
-                target_id=selected_target if selected_target != "All" else None,
-                keyword=selected_keyword if selected_keyword != "All" else None,
-                gclid=gclid_search.strip() if gclid_search and gclid_search.strip() else None,
-                fraud_threshold=fraud_threshold
-            )
+    # Load Google Ads events from DynamoDB
+    with st.spinner("Loading Google Ads events from DynamoDB..."):
+        # Always use DynamoDB as the data source
+        events = get_google_ads_events(
+            hours=view_hours,
+            campaign_id=selected_campaign if selected_campaign != "All" else None,
+            target_id=selected_target if selected_target != "All" else None,
+            keyword=selected_keyword if selected_keyword != "All" else None,
+            gclid=gclid_search.strip() if gclid_search and gclid_search.strip() else None,
+            fraud_threshold=fraud_threshold
+        )
+        
+        if events:
+            # Count events by source for display
+            api_source_events = [e for e in events if e.get('source') == 'google_ads_api']
+            tracking_events = [e for e in events if e.get('source') == 'google_ads']
+            st.info(f"📊 Loaded {len(events)} events from DynamoDB ({len(api_source_events)} historical API events, {len(tracking_events)} tracking events)")
     
     # Show "View in Event Detail" button if GCLID search found results
     if gclid_search and gclid_search.strip() and events:
@@ -1460,44 +1506,36 @@ def render_google_ads_view(hours: int):
     # Data Source Breakdown
     if events:
         st.divider()
-        st.subheader("📊 Data Source Breakdown")
+        st.subheader("📊 Data Source Breakdown (All from DynamoDB)")
         
-        api_events = [e for e in events if e.get('source') == 'google_ads_api']
-        db_events = [e for e in events if e.get('source') == 'google_ads' or e.get('source') == 'regular']
+        api_source_events = [e for e in events if e.get('source') == 'google_ads_api']
+        tracking_events = [e for e in events if e.get('source') == 'google_ads']
         
-        api_count = len(api_events)
-        db_count = len(db_events)
+        api_source_count = len(api_source_events)
+        tracking_count = len(tracking_events)
         total_count = len(events)
         
-        col1, col2, col3, col4 = st.columns(4)
+        col1, col2, col3 = st.columns(3)
         
         with col1:
             st.metric(
-                "🌐 Google Ads API",
-                f"{api_count:,}",
-                help="Real-time data from Google Ads API (campaigns, clicks, impressions, cost, conversions)"
+                "📦 Historical API Data",
+                f"{api_source_count:,}",
+                help="Historical Google Ads data imported from API and stored in DynamoDB"
             )
         
         with col2:
             st.metric(
-                "💾 DynamoDB Events",
-                f"{db_count:,}",
-                help="Fraud detection events stored in DynamoDB"
+                "🔄 Real-time Tracking",
+                f"{tracking_count:,}",
+                help="Real-time tracking events stored in DynamoDB"
             )
         
         with col3:
             st.metric(
                 "📈 Total Events",
                 f"{total_count:,}",
-                help="Combined events from both sources"
-            )
-        
-        with col4:
-            api_percentage = (api_count / total_count * 100) if total_count > 0 else 0
-            st.metric(
-                "API Coverage",
-                f"{api_percentage:.1f}%",
-                help="Percentage of events from Google Ads API"
+                help="All events from DynamoDB"
             )
         
         # Show detailed breakdown
@@ -1505,14 +1543,14 @@ def render_google_ads_view(hours: int):
             col1, col2 = st.columns(2)
             
             with col1:
-                st.markdown("### 🌐 Google Ads API Data")
-                if api_count > 0:
+                st.markdown("### 📦 Historical API Data")
+                if api_source_count > 0:
                     # Calculate API metrics
-                    api_clicks = api_count
-                    api_impressions = sum(e.get('impressions', 0) for e in api_events if isinstance(e.get('impressions'), (int, float)))
-                    api_cost_micros = sum(e.get('cost_micros', 0) for e in api_events if isinstance(e.get('cost_micros'), (int, float)))
-                    api_conversions = sum(e.get('conversions', 0) for e in api_events if isinstance(e.get('conversions'), (int, float)))
-                    api_fraud_count = sum(1 for e in api_events if e.get('is_fraud', False))
+                    api_clicks = api_source_count
+                    api_impressions = sum(e.get('impressions', 0) for e in api_source_events if isinstance(e.get('impressions'), (int, float)))
+                    api_cost_micros = sum(e.get('cost_micros', 0) for e in api_source_events if isinstance(e.get('cost_micros'), (int, float)))
+                    api_conversions = sum(e.get('conversions', 0) for e in api_source_events if isinstance(e.get('conversions'), (int, float)))
+                    api_fraud_count = sum(1 for e in api_source_events if e.get('is_fraud', False))
                     
                     st.write(f"**Clicks:** {api_clicks:,}")
                     st.write(f"**Impressions:** {int(api_impressions):,}")
@@ -1521,29 +1559,29 @@ def render_google_ads_view(hours: int):
                     st.write(f"**Fraud Detected:** {api_fraud_count:,} ({api_fraud_count / api_clicks * 100 if api_clicks > 0 else 0:.1f}%)")
                     
                     # Show unique campaigns from API
-                    api_campaigns = set(e.get('campaign_id', '') for e in api_events if e.get('campaign_id'))
+                    api_campaigns = set(e.get('campaign_id', '') for e in api_source_events if e.get('campaign_id'))
                     if api_campaigns:
                         st.write(f"**Campaigns:** {len(api_campaigns)}")
                         with st.expander("View Campaigns"):
                             for camp_id in sorted(api_campaigns):
-                                camp_name = next((e.get('campaign_name', '') for e in api_events if e.get('campaign_id') == camp_id), '')
+                                camp_name = next((e.get('campaign_name', '') for e in api_source_events if e.get('campaign_id') == camp_id), '')
                                 st.write(f"- {camp_id}: {camp_name}")
                 else:
-                    st.info("No Google Ads API data in current view")
+                    st.info("No historical API data in current view")
             
             with col2:
-                st.markdown("### 💾 DynamoDB Events")
-                if db_count > 0:
-                    db_fraud_count = sum(1 for e in db_events if e.get('is_fraud', False))
-                    db_legitimate_count = db_count - db_fraud_count
+                st.markdown("### 🔄 Real-time Tracking Events")
+                if tracking_count > 0:
+                    tracking_fraud_count = sum(1 for e in tracking_events if e.get('is_fraud', False))
+                    tracking_legitimate_count = tracking_count - tracking_fraud_count
                     
-                    st.write(f"**Total Events:** {db_count:,}")
-                    st.write(f"**Fraud Detected:** {db_fraud_count:,} ({db_fraud_count / db_count * 100 if db_count > 0 else 0:.1f}%)")
-                    st.write(f"**Legitimate:** {db_legitimate_count:,} ({db_legitimate_count / db_count * 100 if db_count > 0 else 0:.1f}%)")
+                    st.write(f"**Total Events:** {tracking_count:,}")
+                    st.write(f"**Fraud Detected:** {tracking_fraud_count:,} ({tracking_fraud_count / tracking_count * 100 if tracking_count > 0 else 0:.1f}%)")
+                    st.write(f"**Legitimate:** {tracking_legitimate_count:,} ({tracking_legitimate_count / tracking_count * 100 if tracking_count > 0 else 0:.1f}%)")
                     
                     # Show fraud types
                     fraud_types = {}
-                    for e in db_events:
+                    for e in tracking_events:
                         if e.get('is_fraud'):
                             fraud_type = e.get('primary_fraud_type', 'unknown')
                             fraud_types[fraud_type] = fraud_types.get(fraud_type, 0) + 1
@@ -1573,12 +1611,12 @@ def render_google_ads_view(hours: int):
     total_cost_micros = sum(e.get('cost_micros', 0) for e in events if isinstance(e.get('cost_micros'), (int, float)))
     total_conversions = sum(e.get('conversions', 0) for e in events if isinstance(e.get('conversions'), (int, float)))
     
-    if api_available and api_events_count > 0:
+    if api_events_count > 0:
         # Show expanded metrics for API data
         col1, col2, col3, col4, col5 = st.columns(5)
         
         with col1:
-            st.metric("Total Clicks", total_clicks, help="From Google Ads API" if api_events_count > 0 else "From DynamoDB")
+            st.metric("Total Clicks", total_clicks, help="From DynamoDB (Google Ads API source)" if api_events_count > 0 else "From DynamoDB")
         with col2:
             st.metric("Impressions", f"{int(total_impressions):,}", help="From Google Ads API")
         with col3:
@@ -1661,7 +1699,7 @@ def render_google_ads_view(hours: int):
     df = pd.DataFrame(table_data)
     
     # Display table with appropriate columns
-    if api_available and api_events_count > 0:
+    if api_events_count > 0:
         # Show API columns
         display_columns = ['Source', 'Timestamp', 'Campaign', 'Keyword', 'Target', 'Cost', 'Impressions', 'Conversions', 'Fraud Score', 'Is Fraud']
         # Filter to only include columns that exist

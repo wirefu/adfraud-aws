@@ -374,6 +374,136 @@ def fetch_google_ads_placements(
         return []
 
 
+def fetch_google_ads_click_details(
+    date: str,
+    campaign_id: Optional[str] = None
+) -> List[Dict[str, Any]]:
+    """
+    Fetch detailed click-level data from ClickView resource
+    Includes real GCLIDs and individual click details
+    
+    IMPORTANT: Only available for dates within the last 90 days
+    
+    Args:
+        date: Date in YYYY-MM-DD format (must be within last 90 days)
+        campaign_id: Optional campaign ID to filter
+    
+    Returns:
+        List of click detail dictionaries with GCLIDs
+    """
+    client = get_google_ads_api_client()
+    if not client:
+        return []
+    
+    try:
+        click_details = client.get_click_details(date=date, campaign_id=campaign_id)
+        return click_details
+    except Exception as e:
+        print(f"Error fetching click details for {date}: {str(e)}")
+        return []
+
+
+def is_within_90_days(date_str: str) -> bool:
+    """
+    Check if a date is within the last 90 days (ClickView availability window)
+    
+    Args:
+        date_str: Date in YYYY-MM-DD format
+    
+    Returns:
+        True if date is within last 90 days, False otherwise
+    """
+    try:
+        date_obj = datetime.strptime(date_str, '%Y-%m-%d').replace(tzinfo=timezone.utc)
+        now = datetime.now(timezone.utc)
+        days_diff = (now - date_obj).days
+        return days_diff <= 90
+    except:
+        return False
+
+
+def fetch_google_ads_optimization_scores(
+    campaign_id: Optional[str] = None
+) -> List[Dict[str, Any]]:
+    """
+    Fetch optimization scores from Google Ads API
+    
+    Args:
+        campaign_id: Optional campaign ID to filter
+    
+    Returns:
+        List of optimization score dictionaries
+    """
+    client = get_google_ads_api_client()
+    if not client:
+        return []
+    
+    try:
+        scores = client.get_optimization_scores(campaign_id=campaign_id)
+        return scores
+    except Exception as e:
+        print(f"Error fetching optimization scores: {str(e)}")
+        return []
+
+
+def fetch_google_ads_quality_scores(
+    campaign_id: Optional[str] = None,
+    days: int = 30
+) -> List[Dict[str, Any]]:
+    """
+    Fetch keyword quality scores from Google Ads API
+    
+    Args:
+        campaign_id: Optional campaign ID to filter
+        days: Number of days to look back
+    
+    Returns:
+        List of keyword quality score data
+    """
+    client = get_google_ads_api_client()
+    if not client:
+        return []
+    
+    try:
+        now = datetime.now(timezone.utc)
+        end_date = now.strftime('%Y-%m-%d')
+        start_date = (now - timedelta(days=days)).strftime('%Y-%m-%d')
+        
+        quality_scores = client.get_keyword_quality_scores(
+            campaign_id=campaign_id,
+            start_date=start_date,
+            end_date=end_date
+        )
+        return quality_scores
+    except Exception as e:
+        print(f"Error fetching quality scores: {str(e)}")
+        return []
+
+
+def fetch_google_ads_recommendations(
+    campaign_id: Optional[str] = None
+) -> List[Dict[str, Any]]:
+    """
+    Fetch optimization recommendations from Google Ads API
+    
+    Args:
+        campaign_id: Optional campaign ID to filter
+    
+    Returns:
+        List of recommendation dictionaries
+    """
+    client = get_google_ads_api_client()
+    if not client:
+        return []
+    
+    try:
+        recommendations = client.get_recommendations(campaign_id=campaign_id)
+        return recommendations
+    except Exception as e:
+        print(f"Error fetching recommendations: {str(e)}")
+        return []
+
+
 def merge_google_ads_with_fraud_data(
     google_ads_data: List[Dict[str, Any]],
     fraud_events: List[Dict[str, Any]]
