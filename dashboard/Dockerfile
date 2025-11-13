@@ -6,14 +6,20 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
 
 # Install Python dependencies
-COPY requirements.txt .
+COPY dashboard/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy Streamlit config
-COPY .streamlit ./.streamlit
+COPY dashboard/.streamlit ./.streamlit
+
+# Copy src directory for imports
+COPY src ./src
+
+# Copy Google Ads integration
+COPY dashboard/google_ads_api_integration.py .
 
 # Copy application
-COPY app.py .
+COPY dashboard/app.py .
 
 # Expose port
 EXPOSE 8501

@@ -16,7 +16,12 @@ import io
 import csv
 
 # Add src directory to path for imports
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+# In container, src is in the same directory as app.py
+# In local dev, src is in parent directory
+src_path = os.path.join(os.path.dirname(__file__), 'src')
+if not os.path.exists(src_path):
+    src_path = os.path.join(os.path.dirname(__file__), '..', 'src')
+sys.path.insert(0, os.path.dirname(src_path))
 from src.storage.dynamodb_utils import (
     query_events_by_gclid,
     query_events_by_keyword,

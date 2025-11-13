@@ -91,7 +91,7 @@ jobs:
           echo "ENV=${ENV}"
           echo "IMAGE_URI=${IMAGE_URI}"
           
-          docker build -t "${IMAGE_URI}" .
+          docker build -f dashboard/Dockerfile -t "${IMAGE_URI}" .
           docker tag "${IMAGE_URI}" "${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${ENV}-latest"
           
           echo "image_uri=${IMAGE_URI}" >> $GITHUB_OUTPUT
