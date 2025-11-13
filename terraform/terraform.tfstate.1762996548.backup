@@ -1,0 +1,1233 @@
+{
+  "version": 4,
+  "terraform_version": "1.11.4",
+  "serial": 21,
+  "lineage": "145e1fd8-f4b1-918c-a7a8-d1bb47fa034c",
+  "outputs": {
+    "ai_analyzer_arn": {
+      "value": "arn:aws:lambda:us-east-1:971422717446:function:fraudguard-ai-ai-analyzer-dev",
+      "type": "string"
+    },
+    "decision_combiner_arn": {
+      "value": "arn:aws:lambda:us-east-1:971422717446:function:fraudguard-ai-decision-combiner-dev",
+      "type": "string"
+    },
+    "dynamodb_table_name": {
+      "value": "fraudguard-ai-events-dev",
+      "type": "string"
+    },
+    "ingestion_handler_arn": {
+      "value": "arn:aws:lambda:us-east-1:971422717446:function:fraudguard-ai-ingestion-handler-dev",
+      "type": "string"
+    },
+    "orchestrator_arn": {
+      "value": "arn:aws:lambda:us-east-1:971422717446:function:fraudguard-ai-orchestrator-dev",
+      "type": "string"
+    },
+    "s3_bucket_name": {
+      "value": "fraudguard-ai-data-971422717446",
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "mode": "data",
+      "type": "archive_file",
+      "name": "ai_analyzer",
+      "provider": "provider[\"registry.terraform.io/hashicorp/archive\"]",
+      "instances": [
+        {
+          "schema_version": 0,
+          "attributes": {
+            "exclude_symlink_directories": null,
+            "excludes": [
+              "*.pyc",
+              "__pycache__"
+            ],
+            "id": "56a86ec011ad5f78ffd133d86688e314d07b23e3",
+            "output_base64sha256": "fBSlAsg2uRmjaVVxAelh1GWzBr/1R+wFP11LGhe89QM=",
+            "output_base64sha512": "JFpnZgt7/5pL2QbQMRIb4yqKJ0+GAkofPOI+YPVrJd+lcdrKkIOsDMIeMDc7viUCi5xzO3QY9Fws244e+F9t2g==",
+            "output_file_mode": null,
+            "output_md5": "7cb69981224e1fb0da63f9c43d402b98",
+            "output_path": "./.terraform/ai-analyzer.zip",
+            "output_sha": "56a86ec011ad5f78ffd133d86688e314d07b23e3",
+            "output_sha256": "7c14a502c836b919a369557101e961d465b306bff547ec053f5d4b1a17bcf503",
+            "output_sha512": "245a67660b7bff9a4bd906d031121be32a8a274f86024a1f3ce23e60f56b25dfa571daca9083ac0cc21e30373bbe25028b9c733b7418f45c2cdb8e1ef85f6dda",
+            "output_size": 10258,
+            "source": [],
+            "source_content": null,
+            "source_content_filename": null,
+            "source_dir": "./../src/ai_analyzer",
+            "source_file": null,
+            "type": "zip"
+          },
+          "sensitive_attributes": []
+        }
+      ]
+    },
+    {
+      "mode": "data",
+      "type": "archive_file",
+      "name": "decision_combiner",
+      "provider": "provider[\"registry.terraform.io/hashicorp/archive\"]",
+      "instances": [
+        {
+          "schema_version": 0,
+          "attributes": {
+            "exclude_symlink_directories": null,
+            "excludes": [
+              "*.pyc",
+              "__pycache__"
+            ],
+            "id": "eb1d77b3721c6f7eedfdd6253855c77b4bb98f01",
+            "output_base64sha256": "fZfXiNmWmx2IfKkD9qJCVMZLJBheSFIAy2EjdLS1DD0=",
+            "output_base64sha512": "XjQwIqcsiY7/12pmlubNgVHmn8VctpF31k1KHnMJBwuMDqr5Y5mfM+XbFCpkiyioh5yKjvug7w2NT+gJOveySg==",
+            "output_file_mode": null,
+            "output_md5": "5de2cc711bb0027f6b63382550c0d2b4",
+            "output_path": "./.terraform/decision-combiner.zip",
+            "output_sha": "eb1d77b3721c6f7eedfdd6253855c77b4bb98f01",
+            "output_sha256": "7d97d788d9969b1d887ca903f6a24254c64b24185e485200cb612374b4b50c3d",
+            "output_sha512": "5e343022a72c898effd76a6696e6cd8151e69fc55cb69177d64d4a1e7309070b8c0eaaf963999f33e5db142a648b28a8879c8a8efba0ef0d8d4fe8093af7b24a",
+            "output_size": 3999,
+            "source": [],
+            "source_content": null,
+            "source_content_filename": null,
+            "source_dir": "./../src/decision_combiner",
+            "source_file": null,
+            "type": "zip"
+          },
+          "sensitive_attributes": []
+        }
+      ]
+    },
+    {
+      "mode": "data",
+      "type": "archive_file",
+      "name": "ingestion_handler",
+      "provider": "provider[\"registry.terraform.io/hashicorp/archive\"]",
+      "instances": [
+        {
+          "schema_version": 0,
+          "attributes": {
+            "exclude_symlink_directories": null,
+            "excludes": [
+              "*.pyc",
+              "__pycache__"
+            ],
+            "id": "4050764915f84727b6258b5073b7fb177aefee3b",
+            "output_base64sha256": "ohKvvrRrtM/lDNK4NF5b5E/YCv04iHZNor58MGInLWM=",
+            "output_base64sha512": "lecq7RyEhoWTvVsiloyIU9TnQELrB0RisnVoqVJ201vNyaxOeYHo06RQxucB3NLTzu+rrIYwUR1RBNgdy/P6YQ==",
+            "output_file_mode": null,
+            "output_md5": "09982bf5b4e6943eaa5f2bc32c8dec72",
+            "output_path": "./.terraform/ingestion-handler.zip",
+            "output_sha": "4050764915f84727b6258b5073b7fb177aefee3b",
+            "output_sha256": "a212afbeb46bb4cfe50cd2b8345e5be44fd80afd3888764da2be7c3062272d63",
+            "output_sha512": "95e72aed1c84868593bd5b22968c8853d4e74042eb074462b27568a95276d35bcdc9ac4e7981e8d3a450c6e701dcd2d3ceefabac8630511d5104d81dcbf3fa61",
+            "output_size": 2505,
+            "source": [],
+            "source_content": null,
+            "source_content_filename": null,
+            "source_dir": "./../src/ingestion",
+            "source_file": null,
+            "type": "zip"
+          },
+          "sensitive_attributes": []
+        }
+      ]
+    },
+    {
+      "mode": "data",
+      "type": "archive_file",
+      "name": "orchestrator",
+      "provider": "provider[\"registry.terraform.io/hashicorp/archive\"]",
+      "instances": [
+        {
+          "schema_version": 0,
+          "attributes": {
+            "exclude_symlink_directories": null,
+            "excludes": [
+              "*.pyc",
+              "__pycache__"
+            ],
+            "id": "73ba7cf3b79474d1e51ef55592acafd0d2fce957",
+            "output_base64sha256": "PnKS8yDidSeugYvfO3oCUlLUQI1Fpfeb9s3LSpnGzUE=",
+            "output_base64sha512": "dAYXhxiMibpWWfCVwJsggPo9daKAEC11TdyeR8OySsp+myZxW1mDRHgVs/o/bWWnTw+idiN9hse6sgbjgjMU6w==",
+            "output_file_mode": null,
+            "output_md5": "17d328b05f34bff083f6eac8786c2f6e",
+            "output_path": "./.terraform/orchestrator.zip",
+            "output_sha": "73ba7cf3b79474d1e51ef55592acafd0d2fce957",
+            "output_sha256": "3e7292f320e27527ae818bdf3b7a025252d4408d45a5f79bf6cdcb4a99c6cd41",
+            "output_sha512": "74061787188c89ba5659f095c09b2080fa3d75a280102d754ddc9e47c3b24aca7e9b26715b5983447815b3fa3f6d65a74f0fa276237d86c7bab206e3823314eb",
+            "output_size": 10940,
+            "source": [],
+            "source_content": null,
+            "source_content_filename": null,
+            "source_dir": "./../src/orchestrator",
+            "source_file": null,
+            "type": "zip"
+          },
+          "sensitive_attributes": []
+        }
+      ]
+    },
+    {
+      "mode": "data",
+      "type": "aws_caller_identity",
+      "name": "current",
+      "provider": "provider[\"registry.terraform.io/hashicorp/aws\"]",
+      "instances": [
+        {
+          "schema_version": 0,
+          "attributes": {
+            "account_id": "971422717446",
+            "arn": "arn:aws:iam::971422717446:user/yansmailbox@gmail.com",
+            "id": "971422717446",
+            "user_id": "AIDA6ELKOKYDPIUHOVTGD"
+          },
+          "sensitive_attributes": []
+        }
+      ]
+    },
+    {
+      "mode": "managed",
+      "type": "aws_dynamodb_table",
+      "name": "events",
+      "provider": "provider[\"registry.terraform.io/hashicorp/aws\"]",
+      "instances": [
+        {
+          "index_key": 0,
+          "schema_version": 1,
+          "attributes": {
+            "arn": "arn:aws:dynamodb:us-east-1:971422717446:table/fraudguard-ai-events-dev",
+            "attribute": [
+              {
+                "name": "campaign_id",
+                "type": "S"
+              },
+              {
+                "name": "device_id",
+                "type": "S"
+              },
+              {
+                "name": "event_id",
+                "type": "S"
+              },
+              {
+                "name": "gclid",
+                "type": "S"
+              },
+              {
+                "name": "keyword",
+                "type": "S"
+              },
+              {
+                "name": "target_id",
+                "type": "S"
+              },
+              {
+                "name": "timestamp",
+                "type": "N"
+              }
+            ],
+            "billing_mode": "PAY_PER_REQUEST",
+            "deletion_protection_enabled": false,
+            "global_secondary_index": [
+              {
+                "hash_key": "campaign_id",
+                "name": "campaign-timestamp-index",
+                "non_key_attributes": [],
+                "on_demand_throughput": [],
+                "projection_type": "ALL",
+                "range_key": "timestamp",
+                "read_capacity": 0,
+                "write_capacity": 0
+              },
+              {
+                "hash_key": "device_id",
+                "name": "device-timestamp-index",
+                "non_key_attributes": [],
+                "on_demand_throughput": [],
+                "projection_type": "ALL",
+                "range_key": "timestamp",
+                "read_capacity": 0,
+                "write_capacity": 0
+              },
+              {
+                "hash_key": "gclid",
+                "name": "gclid-timestamp-index",
+                "non_key_attributes": [],
+                "on_demand_throughput": [],
+                "projection_type": "ALL",
+                "range_key": "timestamp",
+                "read_capacity": 0,
+                "write_capacity": 0
+              },
+              {
+                "hash_key": "keyword",
+                "name": "keyword-timestamp-index",
+                "non_key_attributes": [],
+                "on_demand_throughput": [],
+                "projection_type": "ALL",
+                "range_key": "timestamp",
+                "read_capacity": 0,
+                "write_capacity": 0
+              },
+              {
+                "hash_key": "target_id",
+                "name": "target-timestamp-index",
+                "non_key_attributes": [],
+                "on_demand_throughput": [],
+                "projection_type": "ALL",
+                "range_key": "timestamp",
+                "read_capacity": 0,
+                "write_capacity": 0
+              }
+            ],
+            "hash_key": "event_id",
+            "id": "fraudguard-ai-events-dev",
+            "import_table": [],
+            "local_secondary_index": [],
+            "name": "fraudguard-ai-events-dev",
+            "on_demand_throughput": [],
+            "point_in_time_recovery": [
+              {
+                "enabled": true,
+                "recovery_period_in_days": 35
+              }
+            ],
+            "range_key": "timestamp",
+            "read_capacity": 0,
+            "replica": [],
+            "restore_date_time": null,
+            "restore_source_name": null,
+            "restore_source_table_arn": null,
+            "restore_to_latest_time": null,
+            "server_side_encryption": [],
+            "stream_arn": "arn:aws:dynamodb:us-east-1:971422717446:table/fraudguard-ai-events-dev/stream/2025-11-13T01:06:44.036",
+            "stream_enabled": true,
+            "stream_label": "2025-11-13T01:06:44.036",
+            "stream_view_type": "NEW_AND_OLD_IMAGES",
+            "table_class": "STANDARD",
+            "tags": {
+              "Environment": "dev",
+              "ManagedBy": "Terraform",
+              "Project": "FraudGuardAI"
+            },
+            "tags_all": {
+              "Environment": "dev",
+              "ManagedBy": "Terraform",
+              "Project": "FraudGuardAI"
+            },
+            "timeouts": null,
+            "ttl": [
+              {
+                "attribute_name": "ttl",
+                "enabled": true
+              }
+            ],
+            "write_capacity": 0
+          },
+          "sensitive_attributes": [],
+          "private": "eyJlMmJmYjczMC1lY2FhLTExZTYtOGY4OC0zNDM2M2JjN2M0YzAiOnsiY3JlYXRlIjoxODAwMDAwMDAwMDAwLCJkZWxldGUiOjYwMDAwMDAwMDAwMCwidXBkYXRlIjozNjAwMDAwMDAwMDAwfSwic2NoZW1hX3ZlcnNpb24iOiIxIn0="
+        }
+      ]
+    },
+    {
+      "mode": "managed",
+      "type": "aws_iam_role",
+      "name": "lambda_execution",
+      "provider": "provider[\"registry.terraform.io/hashicorp/aws\"]",
+      "instances": [
+        {
+          "schema_version": 0,
+          "attributes": {
+            "arn": "arn:aws:iam::971422717446:role/fraudguard-ai-lambda-execution-role-dev",
+            "assume_role_policy": "{\"Statement\":[{\"Action\":\"sts:AssumeRole\",\"Effect\":\"Allow\",\"Principal\":{\"Service\":\"lambda.amazonaws.com\"}}],\"Version\":\"2012-10-17\"}",
+            "create_date": "2025-11-13T01:06:44Z",
+            "description": "",
+            "force_detach_policies": false,
+            "id": "fraudguard-ai-lambda-execution-role-dev",
+            "inline_policy": [
+              {
+                "name": "fraudguard-ai-lambda-bedrock-policy-dev",
+                "policy": "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Action\":[\"bedrock:InvokeModel\",\"bedrock:InvokeModelWithResponseStream\"],\"Effect\":\"Allow\",\"Resource\":\"arn:aws:bedrock:us-east-1::foundation-model/anthropic.claude-3-5-sonnet-20240620-v1:0\"}]}"
+              },
+              {
+                "name": "fraudguard-ai-lambda-dynamodb-policy-dev",
+                "policy": "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Action\":[\"dynamodb:PutItem\",\"dynamodb:GetItem\",\"dynamodb:UpdateItem\",\"dynamodb:DeleteItem\",\"dynamodb:Query\",\"dynamodb:Scan\"],\"Effect\":\"Allow\",\"Resource\":[\"arn:aws:dynamodb:us-east-1:971422717446:table/fraudguard-ai-events-dev\",\"arn:aws:dynamodb:us-east-1:971422717446:table/fraudguard-ai-events-dev/index/*\"]}]}"
+              }
+            ],
+            "managed_policy_arns": [
+              "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+            ],
+            "max_session_duration": 3600,
+            "name": "fraudguard-ai-lambda-execution-role-dev",
+            "name_prefix": "",
+            "path": "/",
+            "permissions_boundary": "",
+            "tags": {
+              "Environment": "dev",
+              "ManagedBy": "Terraform",
+              "Project": "FraudGuardAI"
+            },
+            "tags_all": {
+              "Environment": "dev",
+              "ManagedBy": "Terraform",
+              "Project": "FraudGuardAI"
+            },
+            "unique_id": "AROA6ELKOKYDCHLM75RTO"
+          },
+          "sensitive_attributes": [],
+          "private": "bnVsbA=="
+        }
+      ]
+    },
+    {
+      "mode": "managed",
+      "type": "aws_iam_role_policy",
+      "name": "lambda_bedrock",
+      "provider": "provider[\"registry.terraform.io/hashicorp/aws\"]",
+      "instances": [
+        {
+          "schema_version": 0,
+          "attributes": {
+            "id": "fraudguard-ai-lambda-execution-role-dev:fraudguard-ai-lambda-bedrock-policy-dev",
+            "name": "fraudguard-ai-lambda-bedrock-policy-dev",
+            "name_prefix": "",
+            "policy": "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Action\":[\"bedrock:InvokeModel\",\"bedrock:InvokeModelWithResponseStream\"],\"Effect\":\"Allow\",\"Resource\":\"arn:aws:bedrock:us-east-1::foundation-model/anthropic.claude-3-5-sonnet-20240620-v1:0\"}]}",
+            "role": "fraudguard-ai-lambda-execution-role-dev"
+          },
+          "sensitive_attributes": [],
+          "private": "bnVsbA==",
+          "dependencies": [
+            "aws_iam_role.lambda_execution"
+          ]
+        }
+      ]
+    },
+    {
+      "mode": "managed",
+      "type": "aws_iam_role_policy",
+      "name": "lambda_dynamodb",
+      "provider": "provider[\"registry.terraform.io/hashicorp/aws\"]",
+      "instances": [
+        {
+          "schema_version": 0,
+          "attributes": {
+            "id": "fraudguard-ai-lambda-execution-role-dev:fraudguard-ai-lambda-dynamodb-policy-dev",
+            "name": "fraudguard-ai-lambda-dynamodb-policy-dev",
+            "name_prefix": "",
+            "policy": "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Action\":[\"dynamodb:PutItem\",\"dynamodb:GetItem\",\"dynamodb:UpdateItem\",\"dynamodb:DeleteItem\",\"dynamodb:Query\",\"dynamodb:Scan\"],\"Effect\":\"Allow\",\"Resource\":[\"arn:aws:dynamodb:us-east-1:971422717446:table/fraudguard-ai-events-dev\",\"arn:aws:dynamodb:us-east-1:971422717446:table/fraudguard-ai-events-dev/index/*\"]}]}",
+            "role": "fraudguard-ai-lambda-execution-role-dev"
+          },
+          "sensitive_attributes": [],
+          "private": "bnVsbA==",
+          "dependencies": [
+            "aws_dynamodb_table.events",
+            "aws_iam_role.lambda_execution",
+            "data.aws_caller_identity.current"
+          ]
+        }
+      ]
+    },
+    {
+      "mode": "managed",
+      "type": "aws_iam_role_policy",
+      "name": "lambda_invoke",
+      "provider": "provider[\"registry.terraform.io/hashicorp/aws\"]",
+      "instances": [
+        {
+          "schema_version": 0,
+          "attributes": {
+            "id": "fraudguard-ai-lambda-execution-role-dev:fraudguard-ai-lambda-invoke-policy-dev",
+            "name": "fraudguard-ai-lambda-invoke-policy-dev",
+            "name_prefix": "",
+            "policy": "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Action\":[\"lambda:InvokeFunction\"],\"Effect\":\"Allow\",\"Resource\":[\"arn:aws:lambda:us-east-1:971422717446:function:fraudguard-ai-orchestrator-dev\",\"arn:aws:lambda:us-east-1:971422717446:function:fraudguard-ai-ai-analyzer-dev\",\"arn:aws:lambda:us-east-1:971422717446:function:fraudguard-ai-decision-combiner-dev\"]}]}",
+            "role": "fraudguard-ai-lambda-execution-role-dev"
+          },
+          "sensitive_attributes": [],
+          "private": "bnVsbA==",
+          "dependencies": [
+            "aws_dynamodb_table.events",
+            "aws_iam_role.lambda_execution",
+            "aws_lambda_function.ai_analyzer",
+            "aws_lambda_function.decision_combiner",
+            "aws_lambda_function.orchestrator",
+            "aws_s3_bucket.data",
+            "data.archive_file.ai_analyzer",
+            "data.archive_file.decision_combiner",
+            "data.archive_file.orchestrator",
+            "data.aws_caller_identity.current"
+          ]
+        }
+      ]
+    },
+    {
+      "mode": "managed",
+      "type": "aws_iam_role_policy",
+      "name": "lambda_s3",
+      "provider": "provider[\"registry.terraform.io/hashicorp/aws\"]",
+      "instances": [
+        {
+          "schema_version": 0,
+          "attributes": {
+            "id": "fraudguard-ai-lambda-execution-role-dev:fraudguard-ai-lambda-s3-policy-dev",
+            "name": "fraudguard-ai-lambda-s3-policy-dev",
+            "name_prefix": "",
+            "policy": "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Action\":[\"s3:PutObject\",\"s3:GetObject\",\"s3:DeleteObject\"],\"Effect\":\"Allow\",\"Resource\":\"arn:aws:s3:::fraudguard-ai-data-971422717446/*\"}]}",
+            "role": "fraudguard-ai-lambda-execution-role-dev"
+          },
+          "sensitive_attributes": [],
+          "private": "bnVsbA==",
+          "dependencies": [
+            "aws_iam_role.lambda_execution",
+            "aws_s3_bucket.data",
+            "data.aws_caller_identity.current"
+          ]
+        }
+      ]
+    },
+    {
+      "mode": "managed",
+      "type": "aws_iam_role_policy_attachment",
+      "name": "lambda_logs",
+      "provider": "provider[\"registry.terraform.io/hashicorp/aws\"]",
+      "instances": [
+        {
+          "schema_version": 0,
+          "attributes": {
+            "id": "fraudguard-ai-lambda-execution-role-dev-20251113010644454800000001",
+            "policy_arn": "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole",
+            "role": "fraudguard-ai-lambda-execution-role-dev"
+          },
+          "sensitive_attributes": [],
+          "private": "bnVsbA==",
+          "dependencies": [
+            "aws_iam_role.lambda_execution"
+          ]
+        }
+      ]
+    },
+    {
+      "mode": "managed",
+      "type": "aws_lambda_function",
+      "name": "ai_analyzer",
+      "provider": "provider[\"registry.terraform.io/hashicorp/aws\"]",
+      "instances": [
+        {
+          "schema_version": 0,
+          "attributes": {
+            "architectures": [
+              "x86_64"
+            ],
+            "arn": "arn:aws:lambda:us-east-1:971422717446:function:fraudguard-ai-ai-analyzer-dev",
+            "code_sha256": "fBSlAsg2uRmjaVVxAelh1GWzBr/1R+wFP11LGhe89QM=",
+            "code_signing_config_arn": "",
+            "dead_letter_config": [],
+            "description": "",
+            "environment": [
+              {
+                "variables": {
+                  "BEDROCK_MODEL_ID": "anthropic.claude-3-5-sonnet-20240620-v1:0",
+                  "DYNAMODB_TABLE_NAME": "fraudguard-ai-events-dev"
+                }
+              }
+            ],
+            "ephemeral_storage": [
+              {
+                "size": 512
+              }
+            ],
+            "file_system_config": [],
+            "filename": "./.terraform/ai-analyzer.zip",
+            "function_name": "fraudguard-ai-ai-analyzer-dev",
+            "handler": "app.lambda_handler",
+            "id": "fraudguard-ai-ai-analyzer-dev",
+            "image_config": [],
+            "image_uri": "",
+            "invoke_arn": "arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:971422717446:function:fraudguard-ai-ai-analyzer-dev/invocations",
+            "kms_key_arn": "",
+            "last_modified": "2025-11-13T01:07:24.828+0000",
+            "layers": [],
+            "logging_config": [
+              {
+                "application_log_level": "",
+                "log_format": "Text",
+                "log_group": "/aws/lambda/fraudguard-ai-ai-analyzer-dev",
+                "system_log_level": ""
+              }
+            ],
+            "memory_size": 1024,
+            "package_type": "Zip",
+            "publish": false,
+            "qualified_arn": "arn:aws:lambda:us-east-1:971422717446:function:fraudguard-ai-ai-analyzer-dev:$LATEST",
+            "qualified_invoke_arn": "arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:971422717446:function:fraudguard-ai-ai-analyzer-dev:$LATEST/invocations",
+            "replace_security_groups_on_destroy": null,
+            "replacement_security_group_ids": null,
+            "reserved_concurrent_executions": -1,
+            "role": "arn:aws:iam::971422717446:role/fraudguard-ai-lambda-execution-role-dev",
+            "runtime": "python3.11",
+            "s3_bucket": null,
+            "s3_key": null,
+            "s3_object_version": null,
+            "signing_job_arn": "",
+            "signing_profile_version_arn": "",
+            "skip_destroy": false,
+            "snap_start": [],
+            "source_code_hash": "fBSlAsg2uRmjaVVxAelh1GWzBr/1R+wFP11LGhe89QM=",
+            "source_code_size": 10258,
+            "tags": {
+              "Environment": "dev",
+              "ManagedBy": "Terraform",
+              "Project": "FraudGuardAI"
+            },
+            "tags_all": {
+              "Environment": "dev",
+              "ManagedBy": "Terraform",
+              "Project": "FraudGuardAI"
+            },
+            "timeout": 30,
+            "timeouts": null,
+            "tracing_config": [
+              {
+                "mode": "PassThrough"
+              }
+            ],
+            "version": "$LATEST",
+            "vpc_config": []
+          },
+          "sensitive_attributes": [],
+          "private": "eyJlMmJmYjczMC1lY2FhLTExZTYtOGY4OC0zNDM2M2JjN2M0YzAiOnsiY3JlYXRlIjo2MDAwMDAwMDAwMDAsImRlbGV0ZSI6NjAwMDAwMDAwMDAwLCJ1cGRhdGUiOjYwMDAwMDAwMDAwMH19",
+          "dependencies": [
+            "aws_dynamodb_table.events",
+            "aws_iam_role.lambda_execution",
+            "data.archive_file.ai_analyzer"
+          ]
+        }
+      ]
+    },
+    {
+      "mode": "managed",
+      "type": "aws_lambda_function",
+      "name": "decision_combiner",
+      "provider": "provider[\"registry.terraform.io/hashicorp/aws\"]",
+      "instances": [
+        {
+          "schema_version": 0,
+          "attributes": {
+            "architectures": [
+              "x86_64"
+            ],
+            "arn": "arn:aws:lambda:us-east-1:971422717446:function:fraudguard-ai-decision-combiner-dev",
+            "code_sha256": "fZfXiNmWmx2IfKkD9qJCVMZLJBheSFIAy2EjdLS1DD0=",
+            "code_signing_config_arn": "",
+            "dead_letter_config": [],
+            "description": "",
+            "environment": [
+              {
+                "variables": {
+                  "AI_WEIGHT": "0.6",
+                  "DYNAMODB_TABLE_NAME": "fraudguard-ai-events-dev",
+                  "ENSEMBLE_METHOD": "confidence_weighted",
+                  "FRAUD_THRESHOLD": "0.65",
+                  "ML_WEIGHT": "0.4",
+                  "REVIEW_THRESHOLD": "0.5"
+                }
+              }
+            ],
+            "ephemeral_storage": [
+              {
+                "size": 512
+              }
+            ],
+            "file_system_config": [],
+            "filename": "./.terraform/decision-combiner.zip",
+            "function_name": "fraudguard-ai-decision-combiner-dev",
+            "handler": "app.lambda_handler",
+            "id": "fraudguard-ai-decision-combiner-dev",
+            "image_config": [],
+            "image_uri": "",
+            "invoke_arn": "arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:971422717446:function:fraudguard-ai-decision-combiner-dev/invocations",
+            "kms_key_arn": "",
+            "last_modified": "2025-11-13T01:07:18.678+0000",
+            "layers": [],
+            "logging_config": [
+              {
+                "application_log_level": "",
+                "log_format": "Text",
+                "log_group": "/aws/lambda/fraudguard-ai-decision-combiner-dev",
+                "system_log_level": ""
+              }
+            ],
+            "memory_size": 512,
+            "package_type": "Zip",
+            "publish": false,
+            "qualified_arn": "arn:aws:lambda:us-east-1:971422717446:function:fraudguard-ai-decision-combiner-dev:$LATEST",
+            "qualified_invoke_arn": "arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:971422717446:function:fraudguard-ai-decision-combiner-dev:$LATEST/invocations",
+            "replace_security_groups_on_destroy": null,
+            "replacement_security_group_ids": null,
+            "reserved_concurrent_executions": -1,
+            "role": "arn:aws:iam::971422717446:role/fraudguard-ai-lambda-execution-role-dev",
+            "runtime": "python3.11",
+            "s3_bucket": null,
+            "s3_key": null,
+            "s3_object_version": null,
+            "signing_job_arn": "",
+            "signing_profile_version_arn": "",
+            "skip_destroy": false,
+            "snap_start": [],
+            "source_code_hash": "fZfXiNmWmx2IfKkD9qJCVMZLJBheSFIAy2EjdLS1DD0=",
+            "source_code_size": 3999,
+            "tags": {
+              "Environment": "dev",
+              "ManagedBy": "Terraform",
+              "Project": "FraudGuardAI"
+            },
+            "tags_all": {
+              "Environment": "dev",
+              "ManagedBy": "Terraform",
+              "Project": "FraudGuardAI"
+            },
+            "timeout": 30,
+            "timeouts": null,
+            "tracing_config": [
+              {
+                "mode": "PassThrough"
+              }
+            ],
+            "version": "$LATEST",
+            "vpc_config": []
+          },
+          "sensitive_attributes": [],
+          "private": "eyJlMmJmYjczMC1lY2FhLTExZTYtOGY4OC0zNDM2M2JjN2M0YzAiOnsiY3JlYXRlIjo2MDAwMDAwMDAwMDAsImRlbGV0ZSI6NjAwMDAwMDAwMDAwLCJ1cGRhdGUiOjYwMDAwMDAwMDAwMH19",
+          "dependencies": [
+            "aws_dynamodb_table.events",
+            "aws_iam_role.lambda_execution",
+            "data.archive_file.decision_combiner"
+          ]
+        }
+      ]
+    },
+    {
+      "mode": "managed",
+      "type": "aws_lambda_function",
+      "name": "ingestion_handler",
+      "provider": "provider[\"registry.terraform.io/hashicorp/aws\"]",
+      "instances": [
+        {
+          "schema_version": 0,
+          "attributes": {
+            "architectures": [
+              "x86_64"
+            ],
+            "arn": "arn:aws:lambda:us-east-1:971422717446:function:fraudguard-ai-ingestion-handler-dev",
+            "code_sha256": "ohKvvrRrtM/lDNK4NF5b5E/YCv04iHZNor58MGInLWM=",
+            "code_signing_config_arn": "",
+            "dead_letter_config": [],
+            "description": "",
+            "environment": [
+              {
+                "variables": {
+                  "DYNAMODB_TABLE_NAME": "fraudguard-ai-events-dev",
+                  "S3_BUCKET_NAME": "fraudguard-ai-data-971422717446"
+                }
+              }
+            ],
+            "ephemeral_storage": [
+              {
+                "size": 512
+              }
+            ],
+            "file_system_config": [],
+            "filename": "./.terraform/ingestion-handler.zip",
+            "function_name": "fraudguard-ai-ingestion-handler-dev",
+            "handler": "app.lambda_handler",
+            "id": "fraudguard-ai-ingestion-handler-dev",
+            "image_config": [],
+            "image_uri": "",
+            "invoke_arn": "arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:971422717446:function:fraudguard-ai-ingestion-handler-dev/invocations",
+            "kms_key_arn": "",
+            "last_modified": "2025-11-13T01:08:00.684+0000",
+            "layers": null,
+            "logging_config": [
+              {
+                "application_log_level": "",
+                "log_format": "Text",
+                "log_group": "/aws/lambda/fraudguard-ai-ingestion-handler-dev",
+                "system_log_level": ""
+              }
+            ],
+            "memory_size": 512,
+            "package_type": "Zip",
+            "publish": false,
+            "qualified_arn": "arn:aws:lambda:us-east-1:971422717446:function:fraudguard-ai-ingestion-handler-dev:$LATEST",
+            "qualified_invoke_arn": "arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:971422717446:function:fraudguard-ai-ingestion-handler-dev:$LATEST/invocations",
+            "replace_security_groups_on_destroy": null,
+            "replacement_security_group_ids": null,
+            "reserved_concurrent_executions": -1,
+            "role": "arn:aws:iam::971422717446:role/fraudguard-ai-lambda-execution-role-dev",
+            "runtime": "python3.11",
+            "s3_bucket": null,
+            "s3_key": null,
+            "s3_object_version": null,
+            "signing_job_arn": "",
+            "signing_profile_version_arn": "",
+            "skip_destroy": false,
+            "snap_start": [],
+            "source_code_hash": "ohKvvrRrtM/lDNK4NF5b5E/YCv04iHZNor58MGInLWM=",
+            "source_code_size": 2505,
+            "tags": {
+              "Environment": "dev",
+              "ManagedBy": "Terraform",
+              "Project": "FraudGuardAI"
+            },
+            "tags_all": {
+              "Environment": "dev",
+              "ManagedBy": "Terraform",
+              "Project": "FraudGuardAI"
+            },
+            "timeout": 30,
+            "timeouts": null,
+            "tracing_config": [
+              {
+                "mode": "PassThrough"
+              }
+            ],
+            "version": "$LATEST",
+            "vpc_config": []
+          },
+          "sensitive_attributes": [],
+          "private": "eyJlMmJmYjczMC1lY2FhLTExZTYtOGY4OC0zNDM2M2JjN2M0YzAiOnsiY3JlYXRlIjo2MDAwMDAwMDAwMDAsImRlbGV0ZSI6NjAwMDAwMDAwMDAwLCJ1cGRhdGUiOjYwMDAwMDAwMDAwMH19",
+          "dependencies": [
+            "aws_dynamodb_table.events",
+            "aws_iam_role.lambda_execution",
+            "aws_s3_bucket.data",
+            "data.archive_file.ingestion_handler",
+            "data.aws_caller_identity.current"
+          ]
+        }
+      ]
+    },
+    {
+      "mode": "managed",
+      "type": "aws_lambda_function",
+      "name": "orchestrator",
+      "provider": "provider[\"registry.terraform.io/hashicorp/aws\"]",
+      "instances": [
+        {
+          "schema_version": 0,
+          "attributes": {
+            "architectures": [
+              "x86_64"
+            ],
+            "arn": "arn:aws:lambda:us-east-1:971422717446:function:fraudguard-ai-orchestrator-dev",
+            "code_sha256": "PnKS8yDidSeugYvfO3oCUlLUQI1Fpfeb9s3LSpnGzUE=",
+            "code_signing_config_arn": "",
+            "dead_letter_config": [],
+            "description": "",
+            "environment": [
+              {
+                "variables": {
+                  "AI_ANALYZER_FUNCTION": "arn:aws:lambda:us-east-1:971422717446:function:fraudguard-ai-ai-analyzer-dev",
+                  "DECISION_COMBINER_FUNCTION": "arn:aws:lambda:us-east-1:971422717446:function:fraudguard-ai-decision-combiner-dev",
+                  "DYNAMODB_TABLE_NAME": "fraudguard-ai-events-dev",
+                  "S3_BUCKET_NAME": "fraudguard-ai-data-971422717446",
+                  "SAGEMAKER_ENDPOINT": "fraudguard-xgboost-endpoint"
+                }
+              }
+            ],
+            "ephemeral_storage": [
+              {
+                "size": 512
+              }
+            ],
+            "file_system_config": [],
+            "filename": "./.terraform/orchestrator.zip",
+            "function_name": "fraudguard-ai-orchestrator-dev",
+            "handler": "app.lambda_handler",
+            "id": "fraudguard-ai-orchestrator-dev",
+            "image_config": [],
+            "image_uri": "",
+            "invoke_arn": "arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:971422717446:function:fraudguard-ai-orchestrator-dev/invocations",
+            "kms_key_arn": "",
+            "last_modified": "2025-11-13T01:08:06.911+0000",
+            "layers": null,
+            "logging_config": [
+              {
+                "application_log_level": "",
+                "log_format": "Text",
+                "log_group": "/aws/lambda/fraudguard-ai-orchestrator-dev",
+                "system_log_level": ""
+              }
+            ],
+            "memory_size": 1024,
+            "package_type": "Zip",
+            "publish": false,
+            "qualified_arn": "arn:aws:lambda:us-east-1:971422717446:function:fraudguard-ai-orchestrator-dev:$LATEST",
+            "qualified_invoke_arn": "arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:971422717446:function:fraudguard-ai-orchestrator-dev:$LATEST/invocations",
+            "replace_security_groups_on_destroy": null,
+            "replacement_security_group_ids": null,
+            "reserved_concurrent_executions": -1,
+            "role": "arn:aws:iam::971422717446:role/fraudguard-ai-lambda-execution-role-dev",
+            "runtime": "python3.11",
+            "s3_bucket": null,
+            "s3_key": null,
+            "s3_object_version": null,
+            "signing_job_arn": "",
+            "signing_profile_version_arn": "",
+            "skip_destroy": false,
+            "snap_start": [],
+            "source_code_hash": "PnKS8yDidSeugYvfO3oCUlLUQI1Fpfeb9s3LSpnGzUE=",
+            "source_code_size": 10940,
+            "tags": {
+              "Environment": "dev",
+              "ManagedBy": "Terraform",
+              "Project": "FraudGuardAI"
+            },
+            "tags_all": {
+              "Environment": "dev",
+              "ManagedBy": "Terraform",
+              "Project": "FraudGuardAI"
+            },
+            "timeout": 300,
+            "timeouts": null,
+            "tracing_config": [
+              {
+                "mode": "PassThrough"
+              }
+            ],
+            "version": "$LATEST",
+            "vpc_config": []
+          },
+          "sensitive_attributes": [],
+          "private": "eyJlMmJmYjczMC1lY2FhLTExZTYtOGY4OC0zNDM2M2JjN2M0YzAiOnsiY3JlYXRlIjo2MDAwMDAwMDAwMDAsImRlbGV0ZSI6NjAwMDAwMDAwMDAwLCJ1cGRhdGUiOjYwMDAwMDAwMDAwMH19",
+          "dependencies": [
+            "aws_dynamodb_table.events",
+            "aws_iam_role.lambda_execution",
+            "aws_lambda_function.ai_analyzer",
+            "aws_lambda_function.decision_combiner",
+            "aws_s3_bucket.data",
+            "data.archive_file.ai_analyzer",
+            "data.archive_file.decision_combiner",
+            "data.archive_file.orchestrator",
+            "data.aws_caller_identity.current"
+          ]
+        }
+      ]
+    },
+    {
+      "mode": "managed",
+      "type": "aws_s3_bucket",
+      "name": "data",
+      "provider": "provider[\"registry.terraform.io/hashicorp/aws\"]",
+      "instances": [
+        {
+          "schema_version": 0,
+          "attributes": {
+            "acceleration_status": "",
+            "acl": null,
+            "arn": "arn:aws:s3:::fraudguard-ai-data-971422717446",
+            "bucket": "fraudguard-ai-data-971422717446",
+            "bucket_domain_name": "fraudguard-ai-data-971422717446.s3.amazonaws.com",
+            "bucket_prefix": "",
+            "bucket_regional_domain_name": "fraudguard-ai-data-971422717446.s3.us-east-1.amazonaws.com",
+            "cors_rule": [],
+            "force_destroy": false,
+            "grant": [
+              {
+                "id": "ca43bc45a38744637f57d1edad3096e26c2e9253f83dcee2e64c2c79d5863c5c",
+                "permissions": [
+                  "FULL_CONTROL"
+                ],
+                "type": "CanonicalUser",
+                "uri": ""
+              }
+            ],
+            "hosted_zone_id": "Z3AQBSTGFYJSTF",
+            "id": "fraudguard-ai-data-971422717446",
+            "lifecycle_rule": [
+              {
+                "abort_incomplete_multipart_upload_days": 0,
+                "enabled": true,
+                "expiration": [],
+                "id": "ArchiveOldData",
+                "noncurrent_version_expiration": [],
+                "noncurrent_version_transition": [],
+                "prefix": "",
+                "tags": {},
+                "transition": [
+                  {
+                    "date": "",
+                    "days": 90,
+                    "storage_class": "GLACIER"
+                  }
+                ]
+              },
+              {
+                "abort_incomplete_multipart_upload_days": 0,
+                "enabled": true,
+                "expiration": [],
+                "id": "DeleteOldVersions",
+                "noncurrent_version_expiration": [
+                  {
+                    "days": 90
+                  }
+                ],
+                "noncurrent_version_transition": [
+                  {
+                    "days": 30,
+                    "storage_class": "GLACIER_IR"
+                  }
+                ],
+                "prefix": "",
+                "tags": {},
+                "transition": []
+              }
+            ],
+            "logging": [],
+            "object_lock_configuration": [],
+            "object_lock_enabled": false,
+            "policy": "{\"Statement\":[{\"Action\":\"s3:*\",\"Condition\":{\"Bool\":{\"aws:SecureTransport\":\"false\"}},\"Effect\":\"Deny\",\"Principal\":\"*\",\"Resource\":[\"arn:aws:s3:::fraudguard-ai-data-971422717446/*\",\"arn:aws:s3:::fraudguard-ai-data-971422717446\"],\"Sid\":\"DenyInsecureConnections\"}],\"Version\":\"2008-10-17\"}",
+            "region": "us-east-1",
+            "replication_configuration": [],
+            "request_payer": "BucketOwner",
+            "server_side_encryption_configuration": [
+              {
+                "rule": [
+                  {
+                    "apply_server_side_encryption_by_default": [
+                      {
+                        "kms_master_key_id": "",
+                        "sse_algorithm": "AES256"
+                      }
+                    ],
+                    "bucket_key_enabled": false
+                  }
+                ]
+              }
+            ],
+            "tags": {
+              "Environment": "dev",
+              "ManagedBy": "Terraform",
+              "Project": "FraudGuardAI"
+            },
+            "tags_all": {
+              "Environment": "dev",
+              "ManagedBy": "Terraform",
+              "Project": "FraudGuardAI"
+            },
+            "timeouts": null,
+            "versioning": [
+              {
+                "enabled": true,
+                "mfa_delete": false
+              }
+            ],
+            "website": [],
+            "website_domain": null,
+            "website_endpoint": null
+          },
+          "sensitive_attributes": [],
+          "private": "eyJlMmJmYjczMC1lY2FhLTExZTYtOGY4OC0zNDM2M2JjN2M0YzAiOnsiY3JlYXRlIjoxMjAwMDAwMDAwMDAwLCJkZWxldGUiOjM2MDAwMDAwMDAwMDAsInJlYWQiOjEyMDAwMDAwMDAwMDAsInVwZGF0ZSI6MTIwMDAwMDAwMDAwMH19",
+          "dependencies": [
+            "data.aws_caller_identity.current"
+          ]
+        }
+      ]
+    },
+    {
+      "mode": "managed",
+      "type": "aws_s3_bucket_lifecycle_configuration",
+      "name": "data",
+      "provider": "provider[\"registry.terraform.io/hashicorp/aws\"]",
+      "instances": [
+        {
+          "schema_version": 1,
+          "attributes": {
+            "bucket": "fraudguard-ai-data-971422717446",
+            "expected_bucket_owner": "",
+            "id": "fraudguard-ai-data-971422717446",
+            "rule": [
+              {
+                "abort_incomplete_multipart_upload": [],
+                "expiration": [],
+                "filter": [
+                  {
+                    "and": [],
+                    "object_size_greater_than": null,
+                    "object_size_less_than": null,
+                    "prefix": "",
+                    "tag": []
+                  }
+                ],
+                "id": "ArchiveOldData",
+                "noncurrent_version_expiration": [],
+                "noncurrent_version_transition": [],
+                "prefix": "",
+                "status": "Enabled",
+                "transition": [
+                  {
+                    "date": null,
+                    "days": 90,
+                    "storage_class": "GLACIER"
+                  }
+                ]
+              },
+              {
+                "abort_incomplete_multipart_upload": [],
+                "expiration": [],
+                "filter": [],
+                "id": "DeleteOldVersions",
+                "noncurrent_version_expiration": [
+                  {
+                    "newer_noncurrent_versions": null,
+                    "noncurrent_days": 90
+                  }
+                ],
+                "noncurrent_version_transition": [
+                  {
+                    "newer_noncurrent_versions": null,
+                    "noncurrent_days": 30,
+                    "storage_class": "GLACIER_IR"
+                  }
+                ],
+                "prefix": "",
+                "status": "Enabled",
+                "transition": []
+              }
+            ],
+            "timeouts": null,
+            "transition_default_minimum_object_size": "all_storage_classes_128K"
+          },
+          "sensitive_attributes": [],
+          "dependencies": [
+            "aws_s3_bucket.data",
+            "data.aws_caller_identity.current"
+          ]
+        }
+      ]
+    },
+    {
+      "mode": "managed",
+      "type": "aws_s3_bucket_policy",
+      "name": "data",
+      "provider": "provider[\"registry.terraform.io/hashicorp/aws\"]",
+      "instances": [
+        {
+          "schema_version": 0,
+          "attributes": {
+            "bucket": "fraudguard-ai-data-971422717446",
+            "id": "fraudguard-ai-data-971422717446",
+            "policy": "{\"Statement\":[{\"Action\":\"s3:*\",\"Condition\":{\"Bool\":{\"aws:SecureTransport\":\"false\"}},\"Effect\":\"Deny\",\"Principal\":\"*\",\"Resource\":[\"arn:aws:s3:::fraudguard-ai-data-971422717446/*\",\"arn:aws:s3:::fraudguard-ai-data-971422717446\"],\"Sid\":\"DenyInsecureConnections\"}],\"Version\":\"2012-10-17\"}"
+          },
+          "sensitive_attributes": [],
+          "private": "bnVsbA==",
+          "dependencies": [
+            "aws_s3_bucket.data",
+            "data.aws_caller_identity.current"
+          ]
+        }
+      ]
+    },
+    {
+      "mode": "managed",
+      "type": "aws_s3_bucket_public_access_block",
+      "name": "data",
+      "provider": "provider[\"registry.terraform.io/hashicorp/aws\"]",
+      "instances": [
+        {
+          "schema_version": 0,
+          "attributes": {
+            "block_public_acls": true,
+            "block_public_policy": true,
+            "bucket": "fraudguard-ai-data-971422717446",
+            "id": "fraudguard-ai-data-971422717446",
+            "ignore_public_acls": true,
+            "restrict_public_buckets": true
+          },
+          "sensitive_attributes": [],
+          "private": "bnVsbA==",
+          "dependencies": [
+            "aws_s3_bucket.data",
+            "data.aws_caller_identity.current"
+          ]
+        }
+      ]
+    },
+    {
+      "mode": "managed",
+      "type": "aws_s3_bucket_server_side_encryption_configuration",
+      "name": "data",
+      "provider": "provider[\"registry.terraform.io/hashicorp/aws\"]",
+      "instances": [
+        {
+          "schema_version": 0,
+          "attributes": {
+            "bucket": "fraudguard-ai-data-971422717446",
+            "expected_bucket_owner": "",
+            "id": "fraudguard-ai-data-971422717446",
+            "rule": [
+              {
+                "apply_server_side_encryption_by_default": [
+                  {
+                    "kms_master_key_id": "",
+                    "sse_algorithm": "AES256"
+                  }
+                ],
+                "bucket_key_enabled": null
+              }
+            ]
+          },
+          "sensitive_attributes": [],
+          "private": "bnVsbA==",
+          "dependencies": [
+            "aws_s3_bucket.data",
+            "data.aws_caller_identity.current"
+          ]
+        }
+      ]
+    },
+    {
+      "mode": "managed",
+      "type": "aws_s3_bucket_versioning",
+      "name": "data",
+      "provider": "provider[\"registry.terraform.io/hashicorp/aws\"]",
+      "instances": [
+        {
+          "schema_version": 0,
+          "attributes": {
+            "bucket": "fraudguard-ai-data-971422717446",
+            "expected_bucket_owner": "",
+            "id": "fraudguard-ai-data-971422717446",
+            "mfa": null,
+            "versioning_configuration": [
+              {
+                "mfa_delete": "",
+                "status": "Enabled"
+              }
+            ]
+          },
+          "sensitive_attributes": [],
+          "private": "bnVsbA==",
+          "dependencies": [
+            "aws_s3_bucket.data",
+            "data.aws_caller_identity.current"
+          ]
+        }
+      ]
+    }
+  ],
+  "check_results": [
+    {
+      "object_kind": "var",
+      "config_addr": "var.environment",
+      "status": "pass",
+      "objects": [
+        {
+          "object_addr": "var.environment",
+          "status": "pass"
+        }
+      ]
+    }
+  ]
+}

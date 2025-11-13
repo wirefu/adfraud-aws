@@ -239,7 +239,6 @@ Resources:
           AI_WEIGHT: '0.6'
           ENSEMBLE_METHOD: 'confidence_weighted'
 
-<<<<<<< HEAD
   # Lambda: Google Ads Tracking Handler
   GoogleAdsTrackingHandler:
     Type: AWS::Serverless::Function
@@ -901,9 +900,6 @@ Resources:
       RestApiId: !Ref PlatformAPI
       DeploymentId: !Ref APIDeployment
       StageName: !Ref Environment
-      ThrottleSettings:
-        BurstLimit: 10000
-        RateLimit: 5000
       MethodSettings:
         - ResourcePath: '/*'
           HttpMethod: '*'
@@ -1131,13 +1127,6 @@ Resources:
           ]
         }
 
-  # Conditions
-  HasOpsAlertEmail:
-    Fn::Not:
-      - Fn::Equals:
-          - !Ref OpsAlertEmail
-          - ''
-
 Parameters:
   Environment:
     Type: String
@@ -1179,6 +1168,7 @@ Parameters:
 Conditions:
   CreateNewVPC: !Equals [!Ref VpcId, '']
   CreateTable: !Equals [!Ref CreateDynamoDBTable, 'true']
+  HasOpsAlertEmail: !Not [!Equals [!Ref OpsAlertEmail, '']]
 
 Outputs:
   EventsTableName:

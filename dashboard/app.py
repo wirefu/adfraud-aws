@@ -1596,66 +1596,16 @@ def render_google_ads_view(hours: int):
         # Visual indicator in table
         st.info(f"💡 **Tip:** Events marked with 🌐 are from Google Ads API. Events marked with 💾 are from DynamoDB fraud detection.")
     
-    # 4. Overview Metrics
-    st.divider()
-    st.subheader("Overview Metrics")
-    
-    total_clicks = len(events)
-    fraud_count = sum(1 for e in events if e.get('is_fraud', False))
-    fraud_rate = (fraud_count / total_clicks * 100) if total_clicks > 0 else 0.0
-    blocked_count = sum(1 for e in events if e.get('is_fraud', False) and float(e.get('fraud_score', 0.0)) >= fraud_threshold)
-    
-    # Calculate API-specific metrics if available
-    api_events_count = sum(1 for e in events if e.get('source') == 'google_ads_api')
-    total_impressions = sum(e.get('impressions', 0) for e in events if isinstance(e.get('impressions'), (int, float)))
-    total_cost_micros = sum(e.get('cost_micros', 0) for e in events if isinstance(e.get('cost_micros'), (int, float)))
-    total_conversions = sum(e.get('conversions', 0) for e in events if isinstance(e.get('conversions'), (int, float)))
-    
-    if api_events_count > 0:
-        # Show expanded metrics for API data
-        col1, col2, col3, col4, col5 = st.columns(5)
-        
-        with col1:
-            st.metric("Total Clicks", total_clicks, help="From DynamoDB (Google Ads API source)" if api_events_count > 0 else "From DynamoDB")
-        with col2:
-            st.metric("Impressions", f"{int(total_impressions):,}", help="From Google Ads API")
-        with col3:
-            st.metric("Fraud Rate", f"{fraud_rate:.2f}%", delta=f"{fraud_count} events")
-        with col4:
-            st.metric("Total Cost", f"${total_cost_micros / 1_000_000:.2f}", help="From Google Ads API")
-        with col5:
-            st.metric("Conversions", int(total_conversions), help="From Google Ads API")
-        
-        # Additional metrics row
-        col1, col2, col3 = st.columns(3)
-        ctr = (total_clicks / total_impressions * 100) if total_impressions > 0 else 0.0
-        conversion_rate = (total_conversions / total_clicks * 100) if total_clicks > 0 else 0.0
-        avg_cpc = (total_cost_micros / total_clicks / 1_000_000) if total_clicks > 0 else 0.0
-        
-        with col1:
-            st.metric("CTR", f"{ctr:.2f}%")
-        with col2:
-            st.metric("Conversion Rate", f"{conversion_rate:.2f}%")
-        with col3:
-            st.metric("Avg CPC", f"${avg_cpc:.2f}")
-    else:
-        # Standard metrics for DynamoDB-only data
-        col1, col2, col3 = st.columns(3)
-        
-        with col1:
-            st.metric("Total Clicks", total_clicks)
-        with col2:
-            st.metric("Fraud Rate", f"{fraud_rate:.2f}%", delta=f"{fraud_count} events")
-        with col3:
-            st.metric("Blocked", blocked_count)
-    
-    # 5. Event Table
+    # 4. Event Table
     st.divider()
     st.subheader("Recent Google Ads Events")
     
     if not events:
         st.info("No Google Ads events found matching the filters.")
         return
+    
+    # Calculate API-specific metrics if available (needed for table display)
+    api_events_count = sum(1 for e in events if e.get('source') == 'google_ads_api')
     
     # Prepare data for table
     table_data = []
@@ -1717,6 +1667,58 @@ def render_google_ads_view(hours: int):
             use_container_width=True,
             hide_index=True
         )
+    
+    # 5. Overview Metrics
+    st.divider()
+    st.subheader("Overview Metrics")
+    
+    total_clicks = len(events)
+    fraud_count = sum(1 for e in events if e.get('is_fraud', False))
+    fraud_rate = (fraud_count / total_clicks * 100) if total_clicks > 0 else 0.0
+    blocked_count = sum(1 for e in events if e.get('is_fraud', False) and float(e.get('fraud_score', 0.0)) >= fraud_threshold)
+    
+    # Calculate API-specific metrics if available
+    total_impressions = sum(e.get('impressions', 0) for e in events if isinstance(e.get('impressions'), (int, float)))
+    total_cost_micros = sum(e.get('cost_micros', 0) for e in events if isinstance(e.get('cost_micros'), (int, float)))
+    total_conversions = sum(e.get('conversions', 0) for e in events if isinstance(e.get('conversions'), (int, float)))
+    
+    if api_events_count > 0:
+        # Show expanded metrics for API data
+        col1, col2, col3, col4, col5 = st.columns(5)
+        
+        with col1:
+            st.metric("Total Clicks", total_clicks, help="From DynamoDB (Google Ads API source)" if api_events_count > 0 else "From DynamoDB")
+        with col2:
+            st.metric("Impressions", f"{int(total_impressions):,}", help="From Google Ads API")
+        with col3:
+            st.metric("Fraud Rate", f"{fraud_rate:.2f}%", delta=f"{fraud_count} events")
+        with col4:
+            st.metric("Total Cost", f"${total_cost_micros / 1_000_000:.2f}", help="From Google Ads API")
+        with col5:
+            st.metric("Conversions", int(total_conversions), help="From Google Ads API")
+        
+        # Additional metrics row
+        col1, col2, col3 = st.columns(3)
+        ctr = (total_clicks / total_impressions * 100) if total_impressions > 0 else 0.0
+        conversion_rate = (total_conversions / total_clicks * 100) if total_clicks > 0 else 0.0
+        avg_cpc = (total_cost_micros / total_clicks / 1_000_000) if total_clicks > 0 else 0.0
+        
+        with col1:
+            st.metric("CTR", f"{ctr:.2f}%")
+        with col2:
+            st.metric("Conversion Rate", f"{conversion_rate:.2f}%")
+        with col3:
+            st.metric("Avg CPC", f"${avg_cpc:.2f}")
+    else:
+        # Standard metrics for DynamoDB-only data
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            st.metric("Total Clicks", total_clicks)
+        with col2:
+            st.metric("Fraud Rate", f"{fraud_rate:.2f}%", delta=f"{fraud_count} events")
+        with col3:
+            st.metric("Blocked", blocked_count)
     
     # 6. Quick Event Summary (on row selection)
     st.divider()
