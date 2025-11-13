@@ -699,6 +699,9 @@ def calculate_metrics(events: List[Dict[str, Any]], cost_per_click: float = 0.50
             'is_fraud': ['sum', 'count']
         }).reset_index()
         campaign_fraud.columns = ['campaign_id', 'fraud_count', 'total_count']
+        # Convert to numeric to avoid dtype issues
+        campaign_fraud['fraud_count'] = pd.to_numeric(campaign_fraud['fraud_count'], errors='coerce').fillna(0)
+        campaign_fraud['total_count'] = pd.to_numeric(campaign_fraud['total_count'], errors='coerce').fillna(0)
         campaign_fraud['fraud_rate'] = (campaign_fraud['fraud_count'] / campaign_fraud['total_count'] * 100).round(2)
         fraud_by_campaign = campaign_fraud.set_index('campaign_id')['fraud_rate'].to_dict()
     
@@ -709,6 +712,9 @@ def calculate_metrics(events: List[Dict[str, Any]], cost_per_click: float = 0.50
             'is_fraud': ['sum', 'count']
         }).reset_index()
         country_fraud.columns = ['country', 'fraud_count', 'total_count']
+        # Convert to numeric to avoid dtype issues
+        country_fraud['fraud_count'] = pd.to_numeric(country_fraud['fraud_count'], errors='coerce').fillna(0)
+        country_fraud['total_count'] = pd.to_numeric(country_fraud['total_count'], errors='coerce').fillna(0)
         country_fraud['fraud_rate'] = (country_fraud['fraud_count'] / country_fraud['total_count'] * 100).round(2)
         fraud_by_country = country_fraud.set_index('country')['fraud_rate'].to_dict()
     
@@ -1601,81 +1607,12 @@ def render_google_ads_view(hours: int):
         # Visual indicator in table
         st.info(f"💡 **Tip:** Events marked with 🌐 are from Google Ads API. Events marked with 💾 are from DynamoDB fraud detection.")
     
-    # 4. Event Table
-    st.divider()
-    st.subheader("Recent Google Ads Events")
-    
-    if not events:
-        st.info("No Google Ads events found matching the filters.")
-        return
-    
-    # Calculate API-specific metrics if available (needed for table display)
-    api_events_count = sum(1 for e in events if e.get('source') == 'google_ads_api')
-    
-    # Prepare data for table
-    table_data = []
-    for event in events[:1000]:  # Limit to 1000 rows
-        timestamp = event.get('timestamp', 0)
-        dt = datetime.fromtimestamp(timestamp, tz=timezone.utc)
-        gclid = event.get('gclid', '')
-        gclid_display = gclid[:8] + "..." if len(gclid) > 8 else gclid
-        
-        # Determine source
-        source = event.get('source', 'google_ads')
-        source_display = "🌐 API" if source == 'google_ads_api' else "💾 DB"
-        
-        row_data = {
-            'Source': source_display,
-            'Timestamp': dt.strftime('%Y-%m-%d %H:%M:%S'),
-            'GCLID': gclid_display,
-            'Full GCLID': gclid,
-            'Campaign': event.get('campaign_name', event.get('campaign_id', '')),
-            'Keyword': event.get('keyword', ''),
-            'Target': event.get('target_id', ''),
-            'Fraud Score': f"{float(event.get('fraud_score', 0.0)):.2f}",
-            'Is Fraud': "🚨 Fraud" if event.get('is_fraud', False) else "✅ Legitimate",
-            'Event ID': event.get('event_id', ''),
-            'Event': event  # Store full event for details
-        }
-        
-        # Add API-specific columns if available
-        if source == 'google_ads_api':
-            cost_micros = event.get('cost_micros', 0)
-            impressions = event.get('impressions', 0)
-            conversions = event.get('conversions', 0)
-            row_data.update({
-                'Cost': f"${cost_micros / 1_000_000:.2f}" if cost_micros > 0 else "$0.00",
-                'Impressions': f"{int(impressions):,}" if impressions > 0 else "0",
-                'Conversions': f"{int(conversions)}" if conversions > 0 else "0"
-            })
-        
-        table_data.append(row_data)
-    
-    df = pd.DataFrame(table_data)
-    
-    # Display table with appropriate columns
-    if api_events_count > 0:
-        # Show API columns
-        display_columns = ['Source', 'Timestamp', 'Campaign', 'Keyword', 'Target', 'Cost', 'Impressions', 'Conversions', 'Fraud Score', 'Is Fraud']
-        # Filter to only include columns that exist
-        display_columns = [col for col in display_columns if col in df.columns]
-        st.dataframe(
-            df[display_columns],
-            use_container_width=True,
-            hide_index=True
-        )
-    else:
-        # Standard columns for DynamoDB-only
-        display_columns = ['Timestamp', 'GCLID', 'Keyword', 'Target', 'Fraud Score', 'Is Fraud']
-        st.dataframe(
-            df[display_columns],
-            use_container_width=True,
-            hide_index=True
-        )
-    
     # 5. Overview Metrics
     st.divider()
     st.subheader("Overview Metrics")
+    
+    # Calculate API-specific metrics if available
+    api_events_count = sum(1 for e in events if e.get('source') == 'google_ads_api')
     
     total_clicks = len(events)
     fraud_count = sum(1 for e in events if e.get('is_fraud', False))
