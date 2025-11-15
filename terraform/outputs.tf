@@ -33,3 +33,13 @@ output "honeypot_arn" {
   description = "Honeypot Lambda function ARN"
   value       = data.aws_lambda_function.existing_honeypot.arn
 }
+
+output "sagemaker_execution_role_arn" {
+  description = "SageMaker Execution Role ARN"
+  value       = aws_iam_role.sagemaker_execution.arn
+}
+
+output "sagemaker_execution_role_name" {
+  description = "SageMaker Execution Role Name"
+  value       = aws_iam_role.sagemaker_execution.name
+}

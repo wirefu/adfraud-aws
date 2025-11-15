@@ -1666,87 +1666,105 @@ def render_google_ads_view(hours: int):
     st.divider()
     st.subheader("Event Details")
     
-    # Create selectbox for event selection with source indicator
-    event_options = [
-        f"{row['Source']} {row['Timestamp']} - {row['GCLID']} ({row['Is Fraud']})" 
-        for row in table_data
-    ]
-    selected_index = st.selectbox("Select event to view details", range(len(event_options)), format_func=lambda x: event_options[x])
-    
-    if selected_index is not None and selected_index < len(table_data):
-        selected_row = table_data[selected_index]
-        selected_event = selected_row['Event']
-        
-        # Show data source badge
-        event_source = selected_event.get('source', 'google_ads')
-        if event_source == 'google_ads_api':
-            st.success("🌐 **Data Source: Google Ads API** - Real-time data from your Google Ads account")
-        else:
-            st.info("💾 **Data Source: DynamoDB** - Fraud detection event from database")
-        
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            st.write("**Event Information**")
-            st.write(f"**Event ID:** {selected_event.get('event_id', 'N/A')}")
-            st.write(f"**Data Source:** {'🌐 Google Ads API' if event_source == 'google_ads_api' else '💾 DynamoDB'}")
-            st.write(f"**Timestamp:** {datetime.fromtimestamp(selected_event.get('timestamp', 0), tz=timezone.utc).isoformat()}")
-            st.write(f"**GCLID:** {selected_event.get('gclid', 'N/A')}")
-            st.write(f"**Campaign:** {selected_event.get('campaign_name', selected_event.get('campaign_id', 'N/A'))}")
-            st.write(f"**Campaign ID:** {selected_event.get('campaign_id', 'N/A')}")
-            st.write(f"**Keyword:** {selected_event.get('keyword', 'N/A')}")
-            st.write(f"**Target:** {selected_event.get('target_id', 'N/A')}")
-            if selected_event.get('ad_group_id'):
-                st.write(f"**Ad Group ID:** {selected_event.get('ad_group_id')}")
+    if not events:
+        st.info("No events available to display.")
+    else:
+        # Create selectbox for event selection with source indicator
+        event_options = []
+        for event in events[:1000]:  # Limit to 1000 events
+            timestamp = event.get('timestamp', 0)
+            dt = datetime.fromtimestamp(timestamp, tz=timezone.utc)
+            gclid = event.get('gclid', '')
+            gclid_display = gclid[:8] + "..." if len(gclid) > 8 else gclid
             
-            # Show API-specific data if available
-            if event_source == 'google_ads_api':
-                st.markdown("---")
-                st.write("**Google Ads API Metrics:**")
-                cost_micros = selected_event.get('cost_micros', 0)
-                impressions = selected_event.get('impressions', 0)
-                conversions = selected_event.get('conversions', 0)
-                ctr = selected_event.get('ctr', 0.0)
+            # Determine source
+            source = event.get('source', 'google_ads')
+            source_display = "🌐 API" if source == 'google_ads_api' else "💾 DB"
+            
+            # Determine fraud status
+            is_fraud = event.get('is_fraud', False)
+            fraud_status = "🚨 Fraud" if is_fraud else "✅ Legitimate"
+            
+            event_options.append(
+                f"{source_display} {dt.strftime('%Y-%m-%d %H:%M:%S')} - {gclid_display} ({fraud_status})"
+            )
+        
+        if event_options:
+            selected_index = st.selectbox("Select event to view details", range(len(event_options)), format_func=lambda x: event_options[x])
+            
+            if selected_index is not None and selected_index < len(events):
+                selected_event = events[selected_index]
                 
-                if cost_micros > 0:
-                    st.write(f"**Cost:** ${cost_micros / 1_000_000:.2f}")
-                if impressions > 0:
-                    st.write(f"**Impressions:** {int(impressions):,}")
-                if conversions > 0:
-                    st.write(f"**Conversions:** {int(conversions)}")
-                if ctr > 0:
-                    st.write(f"**CTR:** {ctr * 100:.2f}%")
-        
-        with col2:
-            st.write("**Fraud Analysis**")
-            is_fraud = selected_event.get('is_fraud', False)
-            fraud_score = float(selected_event.get('fraud_score', 0.0))
-            st.write(f"**Fraud Status:** {'🚨 Fraud Detected' if is_fraud else '✅ Legitimate'}")
-            st.write(f"**Fraud Score:** {fraud_score:.4f}")
-            st.write(f"**Fraud Type:** {selected_event.get('primary_fraud_type', 'legitimate' if not is_fraud else 'unknown')}")
-            
-            # Show fraud signals if available
-            fraud_signals = selected_event.get('fraud_signals', [])
-            if fraud_signals:
-                st.write("**Fraud Signals:**")
-                if isinstance(fraud_signals, list):
-                    for signal in fraud_signals:
-                        st.write(f"- 🚨 {signal}")
+                # Show data source badge
+                event_source = selected_event.get('source', 'google_ads')
+                if event_source == 'google_ads_api':
+                    st.success("🌐 **Data Source: Google Ads API** - Real-time data from your Google Ads account")
                 else:
-                    st.write(f"- {fraud_signals}")
-            
-            # Show reasoning if available
-            reasoning = selected_event.get('reasoning', '')
-            if reasoning:
-                st.markdown("---")
-                st.write("**AI Reasoning:**")
-                st.caption(reasoning)
-        
-        # View Full Details button
-        if st.button("View Full Details", key="view_full_details"):
-            st.session_state.selected_google_ads_event_id = selected_event.get('event_id')
-            st.session_state.page = "Event Detail"
-            st.rerun()
+                    st.info("💾 **Data Source: DynamoDB** - Fraud detection event from database")
+                
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    st.write("**Event Information**")
+                    st.write(f"**Event ID:** {selected_event.get('event_id', 'N/A')}")
+                    st.write(f"**Data Source:** {'🌐 Google Ads API' if event_source == 'google_ads_api' else '💾 DynamoDB'}")
+                    st.write(f"**Timestamp:** {datetime.fromtimestamp(selected_event.get('timestamp', 0), tz=timezone.utc).isoformat()}")
+                    st.write(f"**GCLID:** {selected_event.get('gclid', 'N/A')}")
+                    st.write(f"**Campaign:** {selected_event.get('campaign_name', selected_event.get('campaign_id', 'N/A'))}")
+                    st.write(f"**Campaign ID:** {selected_event.get('campaign_id', 'N/A')}")
+                    st.write(f"**Keyword:** {selected_event.get('keyword', 'N/A')}")
+                    st.write(f"**Target:** {selected_event.get('target_id', 'N/A')}")
+                    if selected_event.get('ad_group_id'):
+                        st.write(f"**Ad Group ID:** {selected_event.get('ad_group_id')}")
+                    
+                    # Show API-specific data if available
+                    if event_source == 'google_ads_api':
+                        st.markdown("---")
+                        st.write("**Google Ads API Metrics:**")
+                        cost_micros = selected_event.get('cost_micros', 0)
+                        impressions = selected_event.get('impressions', 0)
+                        conversions = selected_event.get('conversions', 0)
+                        ctr = selected_event.get('ctr', 0.0)
+                        
+                        if cost_micros > 0:
+                            st.write(f"**Cost:** ${cost_micros / 1_000_000:.2f}")
+                        if impressions > 0:
+                            st.write(f"**Impressions:** {int(impressions):,}")
+                        if conversions > 0:
+                            st.write(f"**Conversions:** {int(conversions)}")
+                        if ctr > 0:
+                            st.write(f"**CTR:** {ctr * 100:.2f}%")
+                
+                with col2:
+                    st.write("**Fraud Analysis**")
+                    is_fraud = selected_event.get('is_fraud', False)
+                    fraud_score = float(selected_event.get('fraud_score', 0.0))
+                    st.write(f"**Fraud Status:** {'🚨 Fraud Detected' if is_fraud else '✅ Legitimate'}")
+                    st.write(f"**Fraud Score:** {fraud_score:.4f}")
+                    st.write(f"**Fraud Type:** {selected_event.get('primary_fraud_type', 'legitimate' if not is_fraud else 'unknown')}")
+                    
+                    # Show fraud signals if available
+                    fraud_signals = selected_event.get('fraud_signals', [])
+                    if fraud_signals:
+                        st.write("**Fraud Signals:**")
+                        if isinstance(fraud_signals, list):
+                            for signal in fraud_signals:
+                                st.write(f"- 🚨 {signal}")
+                        else:
+                            st.write(f"- {fraud_signals}")
+                    
+                    # Show reasoning if available
+                    reasoning = selected_event.get('reasoning', '')
+                    if reasoning:
+                        st.markdown("---")
+                        st.write("**AI Reasoning:**")
+                        st.caption(reasoning)
+                
+                # View Full Details button
+                if st.button("View Full Details", key="view_full_details"):
+                    st.session_state.selected_google_ads_event_id = selected_event.get('event_id')
+                    st.session_state.page = "Event Detail"
+                    st.rerun()
     
     # 7. Fraud-Adjusted Performance Metrics
     st.divider()

@@ -351,6 +351,7 @@ Resources:
   # SageMakerExecutionRole:
   #   Type: AWS::IAM::Role
   #   Properties:
+  #     RoleName: !Sub '${AWS::StackName}-sagemaker-execution-role'
   #     AssumeRolePolicyDocument:
   #       Version: '2012-10-17'
   #       Statement:
@@ -360,6 +361,36 @@ Resources:
   #           Action: sts:AssumeRole
   #     ManagedPolicyArns:
   #       - arn:aws:iam::aws:policy/AmazonSageMakerFullAccess
+  #     Policies:
+  #       - PolicyName: S3Access
+  #         PolicyDocument:
+  #           Version: '2012-10-17'
+  #           Statement:
+  #             - Effect: Allow
+  #               Action:
+  #                 - s3:GetObject
+  #                 - s3:PutObject
+  #                 - s3:DeleteObject
+  #                 - s3:ListBucket
+  #               Resource:
+  #                 - !Sub '${DataBucket.Arn}/*'
+  #                 - !GetAtt DataBucket.Arn
+  #       - PolicyName: CloudWatchLogsAccess
+  #         PolicyDocument:
+  #           Version: '2012-10-17'
+  #           Statement:
+  #             - Effect: Allow
+  #               Action:
+  #                 - logs:CreateLogGroup
+  #                 - logs:CreateLogStream
+  #                 - logs:PutLogEvents
+  #                 - logs:DescribeLogStreams
+  #               Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/sagemaker/*'
+  #     Tags:
+  #       - Key: Environment
+  #         Value: !Ref Environment
+  #       - Key: Project
+  #         Value: FraudGuardAI
 
   # ECS Dashboard Resources
   # Using existing default VPC to avoid VPC limit issues
@@ -1188,6 +1219,12 @@ Outputs:
     Value: !GetAtt DataBucket.Arn
     Export:
       Name: !Sub '${AWS::StackName}-DataBucketArn'
+
+  # SageMakerExecutionRoleArn:
+  #   Description: SageMaker Execution Role ARN
+  #   Value: !GetAtt SageMakerExecutionRole.Arn
+  #   Export:
+  #     Name: !Sub '${AWS::StackName}-SageMakerExecutionRoleArn'
 
   DashboardALBDNS:
     Description: Dashboard Application Load Balancer DNS Name

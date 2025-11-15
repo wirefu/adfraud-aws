@@ -360,39 +360,47 @@ def extract_features(event: Dict[str, Any], context_data: Dict[str, Any] = None)
     if context_data is None:
         context_data = {}
     
-    # Check if this is a Google Ads event (limited signals)
-    is_google_ads = event.get('source') == 'google_ads'
+    # Check if this is a limited signals event (no IP, user agent, etc.)
+    is_limited_signals = event.get('is_limited_signals', False)
+    platform = event.get('platform', event.get('source', 'generic'))
     
     # Get values from event or context
     ip_click_count_24h = event.get('ip_click_count_24h', context_data.get('ip_click_count_24h', 0))
     device_click_count_1h = event.get('device_click_count_1h', context_data.get('device_click_count_1h', 0))
     time_since_last_click = event.get('time_since_last_click', context_data.get('time_since_last_click', 0))
     
-    # Google Ads specific features
+    # Platform-specific features (Google Ads, Meta, LinkedIn, etc.)
     keyword_fraud_rate = event.get('keyword_fraud_rate', context_data.get('keyword_fraud_rate', 0.0))
     target_fraud_rate = event.get('target_fraud_rate', context_data.get('target_fraud_rate', 0.0))
-    gclid_pattern_score = event.get('gclid_pattern_score', 0.5)  # Pattern analysis of GCLID
+    placement_fraud_rate = event.get('placement_fraud_rate', context_data.get('placement_fraud_rate', 0.0))
+    audience_fraud_rate = event.get('audience_fraud_rate', context_data.get('audience_fraud_rate', 0.0))
+    
+    # Click ID pattern scores (platform-specific)
+    gclid_pattern_score = event.get('gclid_pattern_score', context_data.get('gclid_pattern_score', 0.5))
+    fbclid_pattern_score = event.get('fbclid_pattern_score', context_data.get('fbclid_pattern_score', 0.5))
+    click_id_pattern_score = max(gclid_pattern_score, fbclid_pattern_score)  # Use best available
+    
     # Temporal features
     timestamp = event.get("timestamp", int(datetime.now(timezone.utc).timestamp()))
     dt = datetime.fromtimestamp(timestamp, tz=timezone.utc)
     hour_of_day = dt.hour
     day_of_week = dt.weekday()
     
-    # User agent features (not available for Google Ads events)
-    user_agent = event.get('user_agent', '') if not is_google_ads else ''
-    ua_is_bot = is_bot_user_agent(user_agent) if not is_google_ads else False
-    ua_entropy = calculate_entropy(user_agent) if not is_google_ads else 0.0
+    # User agent features (not available for limited signals events)
+    user_agent = event.get('user_agent', '') if not is_limited_signals else ''
+    ua_is_bot = is_bot_user_agent(user_agent) if not is_limited_signals else False
+    ua_entropy = calculate_entropy(user_agent) if not is_limited_signals else 0.0
     
-    # IP features (not available for Google Ads events)
-    ip_address = event.get('ip_address', '') if not is_google_ads else ''
-    ip_is_datacenter = is_datacenter_ip(ip_address) if not is_google_ads else False
-    ip_is_vpn = is_vpn_ip(ip_address) if not is_google_ads else False
-    ip_is_proxy = is_proxy_ip(ip_address) if not is_google_ads else False
-    ip_is_business = is_business_ip(ip_address) if not is_google_ads else False
+    # IP features (not available for limited signals events)
+    ip_address = event.get('ip_address', '') if not is_limited_signals else ''
+    ip_is_datacenter = is_datacenter_ip(ip_address) if not is_limited_signals else False
+    ip_is_vpn = is_vpn_ip(ip_address) if not is_limited_signals else False
+    ip_is_proxy = is_proxy_ip(ip_address) if not is_limited_signals else False
+    ip_is_business = is_business_ip(ip_address) if not is_limited_signals else False
 
-    # Competitor detection (not available for Google Ads events)
-    competitor_ips = event.get("competitor_ips", context_data.get("competitor_ips", [])) if not is_google_ads else []
-    ip_is_competitor = is_competitor_ip(ip_address, competitor_ips) if not is_google_ads else False
+    # Competitor detection (not available for limited signals events)
+    competitor_ips = event.get("competitor_ips", context_data.get("competitor_ips", [])) if not is_limited_signals else []
+    ip_is_competitor = is_competitor_ip(ip_address, competitor_ips) if not is_limited_signals else False
     # Geographic features (simplified - would use geo IP service in production)
     geo_distance_km = event.get("geo_distance_km", 0.0)
 
@@ -407,14 +415,22 @@ def extract_features(event: Dict[str, Any], context_data: Dict[str, Any] = None)
     campaign_fraud_rate = event.get('campaign_fraud_rate', 0.0)
     publisher_quality = event.get('publisher_quality', 0.5)
     
-    # Google Ads specific historical features
-    # Use keyword/target fraud rates when available (for Google Ads events)
-    if is_google_ads:
-        # Override campaign_fraud_rate with keyword/target rates if available
+    # Platform-specific historical features
+    # Use platform-specific fraud rates when available
+    if platform == 'google_ads':
+        # Google Ads: Use keyword/target fraud rates
         if keyword_fraud_rate > 0:
             campaign_fraud_rate = keyword_fraud_rate
         elif target_fraud_rate > 0:
             campaign_fraud_rate = target_fraud_rate
+    elif platform == 'meta_ads':
+        # Meta Ads: Use placement fraud rate
+        if placement_fraud_rate > 0:
+            campaign_fraud_rate = placement_fraud_rate
+    elif platform == 'linkedin_ads':
+        # LinkedIn Ads: Use audience fraud rate
+        if audience_fraud_rate > 0:
+            campaign_fraud_rate = audience_fraud_rate
     # Device features
     device_fingerprint_entropy = event.get("device_fingerprint_entropy", 0.5)
     is_mobile = event.get("is_mobile", False)
@@ -491,6 +507,7 @@ def extract_features(event: Dict[str, Any], context_data: Dict[str, Any] = None)
     
     # For Google Ads events, add Google-specific features if model supports them
     # Note: Model may need retraining to include these features
+    is_google_ads = platform == 'google_ads' or event.get('source') == 'google_ads' or 'gclid' in event
     if is_google_ads:
         # Add Google-specific features (may need model update)
         features.extend([

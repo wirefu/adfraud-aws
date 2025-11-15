@@ -68,22 +68,45 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         if not event_id:
             return create_error_response(400, "Missing event_id")
 
-        # Get context data from DynamoDB
-        # Check if this is a Google Ads event (limited signals)
-        is_google_ads = body.get('source') == 'google_ads'
+        # Get platform adapter
+        try:
+            from ..platforms.factory import get_platform_adapter, detect_platform_from_event
+            platform_type = detect_platform_from_event(body)
+            platform_adapter = get_platform_adapter(platform_type, source=body.get('source'))
+            
+            # Parse event using platform adapter
+            platform_event = platform_adapter.parse_event(body)
+            
+            # Get context data using platform adapter
+            context_data = platform_adapter.get_context_data(platform_event, TABLE_NAME)
+            
+            # Get platform-specific features
+            platform_features = platform_adapter.extract_platform_features(platform_event, context_data)
+            
+            # Merge platform features into body for feature extraction
+            body.update(platform_features)
+            body['platform'] = platform_type.value
+            body['is_limited_signals'] = platform_adapter.is_limited_signals()
+            
+        except Exception as e:
+            # Fallback to legacy Google Ads handling for backward compatibility
+            print(f"Warning: Platform adapter failed, using legacy handling: {e}")
+            is_google_ads = body.get('source') == 'google_ads'
+            
+            if is_google_ads:
+                context_data = get_google_ads_context_data(
+                    body.get('keyword'),
+                    body.get('target_id'),
+                    body.get('gclid')
+                )
+            else:
+                context_data = get_context_data(
+                    event_id,
+                    body.get('device_id'),
+                    body.get('ip_address')
+                )
+            body['is_limited_signals'] = is_google_ads
         
-        if is_google_ads:
-            context_data = get_google_ads_context_data(
-                body.get('keyword'),
-                body.get('target_id'),
-                body.get('gclid')
-            )
-        else:
-            context_data = get_context_data(
-                event_id,
-                body.get('device_id'),
-                body.get('ip_address')
-            )
         # Extract features for ML model
         feature_vector = extract_features(body, context_data)
 

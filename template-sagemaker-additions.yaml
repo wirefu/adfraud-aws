@@ -1,0 +1,162 @@
+# SageMaker Resources to Add to template.yaml
+# Insert after line 322 (after API Gateway CORS configuration)
+
+  # SageMaker Execution Role
+  SageMakerExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${AWS::StackName}-sagemaker-execution-role'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: sagemaker.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonSageMakerFullAccess
+      Policies:
+        - PolicyName: S3Access
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                  - s3:DeleteObject
+                  - s3:ListBucket
+                Resource:
+                  - !Sub '${DataBucket.Arn}/*'
+                  - !GetAtt DataBucket.Arn
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: FraudGuardAI
+
+  # Lambda: Data Processing for Training
+  DataProcessingFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${AWS::StackName}-data-processing'
+      CodeUri: scripts/
+      Handler: process_training_data.lambda_handler
+      Description: Process TalkingData and engineer features for training
+      Runtime: python3.11
+      Timeout: 900  # 15 minutes
+      MemorySize: 3008  # Maximum for large dataset processing
+      Environment:
+        Variables:
+          S3_BUCKET_NAME: !Ref DataBucket
+          S3_PREFIX: 'fraud-detection/training'
+          FEATURE_COUNT: '30'
+      Policies:
+        - S3ReadWritePolicy:
+            BucketName: !Ref DataBucket
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - logs:CreateLogGroup
+                - logs:CreateLogStream
+                - logs:PutLogEvents
+              Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${AWS::StackName}-data-processing*'
+      Events:
+        ProcessDataSchedule:
+          Type: Schedule
+          Properties:
+            Schedule: rate(7 days)  # Weekly retraining
+            Enabled: false  # Disable by default, enable after initial setup
+            Description: Weekly data processing for model retraining
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: FraudGuardAI
+
+  # CloudWatch Log Group for Data Processing
+  DataProcessingLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${AWS::StackName}-data-processing'
+      RetentionInDays: 7
+
+  # SageMaker Endpoint (will be created after model training)
+  # Note: Model will be created programmatically, then this can be updated
+  SageMakerEndpoint:
+    Type: AWS::SageMaker::Endpoint
+    Condition: CreateSageMakerEndpoint
+    Properties:
+      EndpointName: !Sub '${AWS::StackName}-xgboost-endpoint'
+      EndpointConfigName: !Ref SageMakerEndpointConfig
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: FraudGuardAI
+
+  SageMakerEndpointConfig:
+    Type: AWS::SageMaker::EndpointConfig
+    Condition: CreateSageMakerEndpoint
+    Properties:
+      EndpointConfigName: !Sub '${AWS::StackName}-xgboost-config'
+      ProductionVariants:
+        - VariantName: AllTraffic
+          ModelName: !Ref SageMakerModel
+          InitialInstanceCount: 1
+          InstanceType: ml.t2.medium
+          InitialVariantWeight: 1.0
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: FraudGuardAI
+
+  SageMakerModel:
+    Type: AWS::SageMaker::Model
+    Condition: CreateSageMakerEndpoint
+    Properties:
+      ModelName: !Sub '${AWS::StackName}-xgboost-model'
+      PrimaryContainer:
+        # Use SageMaker built-in XGBoost container
+        # Image will be set programmatically after training
+        # Format: 811284229777.dkr.ecr.{region}.amazonaws.com/xgboost:1.7-1
+        Image: !Sub '${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/xgboost:1.7-1'
+        ModelDataUrl: !Sub 's3://${DataBucket}/fraud-detection/models/xgboost/model.tar.gz'
+      ExecutionRoleArn: !GetAtt SageMakerExecutionRole.Arn
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: FraudGuardAI
+      # Note: ModelDataUrl will be updated after training completes
+
+# Add to Conditions section (around line 1168):
+#  CreateSageMakerEndpoint: !Equals [!Ref CreateSageMakerEndpoint, 'true']
+
+# Add to Parameters section (around line 1130):
+#  CreateSageMakerEndpoint:
+#    Type: String
+#    Default: 'false'
+#    AllowedValues:
+#      - 'true'
+#      - 'false'
+#    Description: Create SageMaker endpoint (set to true after model is trained)
+
+# Add to Outputs section (around line 1173):
+#  SageMakerExecutionRoleArn:
+#    Description: SageMaker Execution Role ARN
+#    Value: !GetAtt SageMakerExecutionRole.Arn
+#    Export:
+#      Name: !Sub '${AWS::StackName}-SageMakerExecutionRoleArn'
+#
+#  SageMakerEndpointName:
+#    Description: SageMaker Endpoint Name
+#    Value: !If
+#      - CreateSageMakerEndpoint
+#      - !Ref SageMakerEndpoint
+#      - 'Not created yet - train model first'
+#    Export:
+#      Name: !Sub '${AWS::StackName}-SageMakerEndpointName'
+

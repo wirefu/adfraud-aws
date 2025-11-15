@@ -1,379 +1,280 @@
+#!/usr/bin/env python3
 """
-Train XGBoost Model on SageMaker
-Prepares dataset and trains XGBoost model using SageMaker's built-in algorithm
+Train XGBoost Model with SageMaker
+
+Trains a baseline XGBoost model using SageMaker's built-in XGBoost algorithm.
+Uses processed training data from S3 (created by process_training_data.py).
 """
+
+import argparse
+import json
+import os
+import sys
+import time
+from pathlib import Path
+from typing import Dict, Optional
+
 import boto3
 import sagemaker
-from sagemaker import get_execution_role
-from sagemaker.amazon.amazon_estimator import get_image_uri
+from sagemaker import Session
 from sagemaker.inputs import TrainingInput
-from sagemaker.session import Session
-import pandas as pd
-import numpy as np
-import os
-import json
-from datetime import datetime
-from typing import Dict, Any
+from sagemaker.xgboost.estimator import XGBoost
 
-# Initialize SageMaker session
-sagemaker_session = sagemaker.Session()
-role = get_execution_role()
-region = sagemaker_session.boto_region_name
-
-# Configuration
-BUCKET_NAME = os.environ.get('S3_BUCKET_NAME', 'fraudguard-data')
-PREFIX = 'training-data'
-MODEL_NAME = 'fraudguard-xgboost'
-INSTANCE_TYPE = 'ml.m5.xlarge'  # Use ml.t2.medium for dev, ml.m5.xlarge for production
-INSTANCE_COUNT = 1
-
-# Hyperparameters (from PRD)
-HYPERPARAMETERS = {
-    'objective': 'binary:logistic',
-    'eval_metric': 'auc',
-    'max_depth': '6',
-    'eta': '0.1',
-    'subsample': '0.8',
-    'colsample_bytree': '0.8',
-    'num_round': '200',
-    'min_child_weight': '1',
-    'gamma': '0',
-    'alpha': '0',
-    'lambda': '1',
-    'scale_pos_weight': '1',  # Adjust if class imbalance
-}
+# Add parent directory to path
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
 
-def prepare_data_for_sagemaker(
-    train_path: str,
-    val_path: str,
-    test_path: str,
-    s3_bucket: str,
-    s3_prefix: str
-) -> Dict[str, str]:
+def get_metrics_from_s3(s3_bucket: str, s3_prefix: str) -> Dict:
+    """Load metrics.json from S3 to get scale_pos_weight"""
+    s3_client = boto3.client('s3')
+    if not s3_prefix.endswith('/'):
+        s3_prefix += '/'
+    metrics_key = f"{s3_prefix}metrics.json"
+    try:
+        print(f"Loading metrics from s3://{s3_bucket}/{metrics_key}...")
+        response = s3_client.get_object(Bucket=s3_bucket, Key=metrics_key)
+        metrics = json.loads(response['Body'].read().decode('utf-8'))
+        print(f"  ✅ Scale pos weight: {metrics.get('scale_pos_weight', 1.0)}")
+        return metrics
+    except Exception as e:
+        print(f"  ⚠️  Warning: Could not load metrics: {e}")
+        return {'scale_pos_weight': 1.0}
+
+
+def clamp_scale_pos_weight(value: float, min_value: float = 1.0) -> float:
     """
-    Prepare dataset for SageMaker training
+    Clamp scale_pos_weight to valid range for SageMaker XGBoost.
+    
+    SageMaker XGBoost requires scale_pos_weight >= 1.0.
+    When fraud is the majority class, we use 1.0 (no weighting).
     
     Args:
-        train_path: Path to training CSV file
-        val_path: Path to validation CSV file
-        test_path: Path to test CSV file
-        s3_bucket: S3 bucket name
-        s3_prefix: S3 prefix for training data
-        
+        value: Calculated scale_pos_weight
+        min_value: Minimum allowed value (default: 1.0)
+    
     Returns:
-        Dictionary with S3 paths for train, val, and test data
+        Clamped value >= min_value
     """
-    print("Preparing data for SageMaker...")
-    
-    # Load datasets
-    train_df = pd.read_csv(train_path)
-    val_df = pd.read_csv(val_path)
-    test_df = pd.read_csv(test_path)
-    
-    # Separate features and labels
-    feature_columns = [col for col in train_df.columns 
-                      if col not in ['is_fraud', 'fraud_type', 'event_id', 'timestamp']]
-    
-    # Prepare training data (features + label)
-    train_data = train_df[feature_columns + ['is_fraud']]
-    val_data = val_df[feature_columns + ['is_fraud']]
-    test_data = test_df[feature_columns + ['is_fraud']]
-    
-    # Convert boolean columns to int
-    bool_columns = train_data.select_dtypes(include=['bool']).columns
-    for col in bool_columns:
-        train_data[col] = train_data[col].astype(int)
-        val_data[col] = val_data[col].astype(int)
-        test_data[col] = test_data[col].astype(int)
-    
-    # Save to local files
-    train_file = 'train.csv'
-    val_file = 'val.csv'
-    test_file = 'test.csv'
-    
-    train_data.to_csv(train_file, index=False, header=False)
-    val_data.to_csv(val_file, index=False, header=False)
-    test_data.to_csv(test_file, index=False, header=False)
-    
-    # Upload to S3
-    s3 = boto3.client('s3')
-    
-    train_s3_path = f"s3://{s3_bucket}/{s3_prefix}/train/train.csv"
-    val_s3_path = f"s3://{s3_bucket}/{s3_prefix}/val/val.csv"
-    test_s3_path = f"s3://{s3_bucket}/{s3_prefix}/test/test.csv"
-    
-    print(f"Uploading training data to {train_s3_path}...")
-    s3.upload_file(train_file, s3_bucket, f"{s3_prefix}/train/train.csv")
-    
-    print(f"Uploading validation data to {val_s3_path}...")
-    s3.upload_file(val_file, s3_bucket, f"{s3_prefix}/val/val.csv")
-    
-    print(f"Uploading test data to {test_s3_path}...")
-    s3.upload_file(test_file, s3_bucket, f"{s3_prefix}/test/test.csv")
-    
-    # Clean up local files
-    os.remove(train_file)
-    os.remove(val_file)
-    os.remove(test_file)
-    
-    print("Data preparation complete!")
-    
+    return max(min_value, value) if value > 0 else min_value
+
+
+def get_baseline_hyperparameters() -> Dict:
+    """Get baseline hyperparameters for XGBoost"""
     return {
-        'train': train_s3_path,
-        'val': val_s3_path,
-        'test': test_s3_path,
-        'feature_columns': feature_columns
-    }
+        'objective': 'binary:logistic',
+                'num_round': 100,
+        'max_depth': 6,
+        'eta': 0.3,
+                'min_child_weight': 1,
+        'subsample': 0.8,
+        'colsample_bytree': 0.8,
+                }
 
 
-def train_xgboost_model(
-    train_data_path: str,
-    val_data_path: str,
+def train_baseline_model(
     s3_bucket: str,
     s3_prefix: str,
-    hyperparameters: Dict[str, str],
+    sagemaker_role_arn: str,
     instance_type: str = 'ml.m5.xlarge',
-    instance_count: int = 1
-) -> sagemaker.estimator.Estimator:
-    """
-    Train XGBoost model on SageMaker
+    output_path: Optional[str] = None,
+    job_name: Optional[str] = None,
+    wait: bool = True
+) -> Dict:
+    """Train baseline XGBoost model using SageMaker"""
+    print("=" * 70)
+    print("SageMaker Baseline XGBoost Training")
+    print("=" * 70)
     
-    Args:
-        train_data_path: S3 path to training data
-        val_data_path: S3 path to validation data
-        s3_bucket: S3 bucket name
-        s3_prefix: S3 prefix for model output
-        hyperparameters: Model hyperparameters
-        instance_type: SageMaker instance type
-        instance_count: Number of instances
-        
-    Returns:
-        Trained SageMaker estimator
-    """
-    print("Starting XGBoost training on SageMaker...")
+    if not s3_prefix.endswith('/'):
+        s3_prefix += '/'
     
-    # Get XGBoost container image
-    container = get_image_uri(region, 'xgboost', '1.5-1')
+    train_path = f"s3://{s3_bucket}/{s3_prefix}train.csv"
+    val_path = f"s3://{s3_bucket}/{s3_prefix}val.csv"
     
-    # Create estimator
-    estimator = sagemaker.estimator.Estimator(
-        image_uri=container,
-        role=role,
-        instance_count=instance_count,
+    # Check for compressed files
+    s3_client = boto3.client('s3')
+    try:
+        s3_client.head_object(Bucket=s3_bucket, Key=f"{s3_prefix}train.csv.gz")
+        train_path += ".gz"
+        val_path += ".gz"
+        print(f"  Using compressed data files")
+    except:
+        pass
+    
+    print(f"Training data: {train_path}")
+    print(f"Validation data: {val_path}")
+    print()
+    
+    # Load metrics
+    metrics = get_metrics_from_s3(s3_bucket, s3_prefix)
+    scale_pos_weight = metrics.get('scale_pos_weight', 1.0)
+    
+    # Clamp to valid range (SageMaker requires >= 1.0)
+    scale_pos_weight = clamp_scale_pos_weight(scale_pos_weight)
+    if scale_pos_weight < 1.0:
+        print(f"  ⚠️  Warning: scale_pos_weight ({scale_pos_weight:.6f}) < 1.0, clamping to 1.0")
+    
+    # Get hyperparameters
+    hyperparameters = get_baseline_hyperparameters()
+    
+    print("Baseline Hyperparameters:")
+    for key, value in hyperparameters.items():
+        print(f"  {key}: {value}")
+    print()
+    
+    if output_path is None:
+        output_path = f"s3://{s3_bucket}/fraud-detection/models/xgboost/baseline/"
+    
+    print(f"Model output: {output_path}")
+    print()
+    
+    # Initialize SageMaker session
+    sess = sagemaker.Session()
+    
+    # Create XGBoost estimator
+    print("Creating XGBoost estimator...")
+    xgb_estimator = XGBoost(
+        entry_point='scripts/xgboost_train.py',
+        role=sagemaker_role_arn,
         instance_type=instance_type,
+        instance_count=1,
+        framework_version='1.7-1',
         hyperparameters=hyperparameters,
-        output_path=f's3://{s3_bucket}/{s3_prefix}/models',
-        sagemaker_session=sagemaker_session,
-        base_job_name=MODEL_NAME
+        output_path=output_path,
+        base_job_name=job_name or 'fraudguard-xgboost-baseline',
+        sagemaker_session=sess,
     )
     
-    # Prepare training inputs
-    train_input = TrainingInput(
-        s3_data=train_data_path,
-        content_type='text/csv'
-    )
-    
-    val_input = TrainingInput(
-        s3_data=val_data_path,
-        content_type='text/csv'
-    )
+    # Set up training inputs
+    train_input = TrainingInput(s3_data=train_path, content_type='text/csv')
+    val_input = TrainingInput(s3_data=val_path, content_type='text/csv')
     
     # Start training job
-    print(f"Training job: {estimator.base_job_name}")
-    print(f"Instance type: {instance_type}")
-    print(f"Hyperparameters: {hyperparameters}")
+    print("Starting training job...")
+    print(f"  Job name: {xgb_estimator._current_job_name}")
+    print(f"  Instance: {instance_type}")
+    print()
     
-    estimator.fit(
-        inputs={'train': train_input, 'validation': val_input},
-        wait=True,
+    xgb_estimator.fit(
+        {'train': train_input, 'validation': val_input},
+        wait=wait,
         logs=True
     )
     
-    print("Training complete!")
+    training_job_name = xgb_estimator.latest_training_job.name
     
-    return estimator
-
-
-def evaluate_model(
-    estimator: sagemaker.estimator.Estimator,
-    test_data_path: str,
-    feature_columns: list
-) -> Dict[str, Any]:
-    """
-    Evaluate trained model on test set
+    print()
+    print("=" * 70)
+    print("Training Complete!")
+    print("=" * 70)
+    if xgb_estimator.latest_training_job:
+        training_job_name = xgb_estimator.latest_training_job.name
+        print(f"Training job name: {training_job_name}")
+        print(f"  Model artifact will be available after training completes")
+        print(f"  Check status: aws sagemaker describe-training-job --training-job-name {training_job_name}")
+    else:
+        print("  Training job started (use --wait to see model artifact)")
+    print(f"Model output path: {output_path}")
     
-    Args:
-        estimator: Trained SageMaker estimator
-        test_data_path: S3 path to test data
-        feature_columns: List of feature column names
-        
-    Returns:
-        Evaluation metrics dictionary
-    """
-    print("Evaluating model on test set...")
+    if wait:
+        print("\nTraining Metrics:")
+        training_job = sess.sagemaker_client.describe_training_job(
+            TrainingJobName=training_job_name
+        )
+        final_metrics = training_job.get('FinalMetricDataList', [])
+        for metric in final_metrics:
+            metric_name = metric.get('MetricName', '')
+            metric_value = metric.get('Value', 0)
+            if 'validation' in metric_name.lower() or 'train' in metric_name.lower():
+                print(f"  {metric_name}: {metric_value:.6f}")
     
-    # Deploy model to endpoint for evaluation
-    predictor = estimator.deploy(
-        initial_instance_count=1,
-        instance_type='ml.t2.medium',  # Use smaller instance for evaluation
-        endpoint_name=f"{MODEL_NAME}-eval"
-    )
-    
-    # Load test data
-    s3 = boto3.client('s3')
-    bucket, key = test_data_path.replace('s3://', '').split('/', 1)
-    
-    # Download test data
-    test_file = 'test_eval.csv'
-    s3.download_file(bucket, key, test_file)
-    
-    test_df = pd.read_csv(test_file, header=None)
-    test_features = test_df.iloc[:, :-1].values
-    test_labels = test_df.iloc[:, -1].values
-    
-    # Make predictions
-    predictions = []
-    batch_size = 100
-    
-    for i in range(0, len(test_features), batch_size):
-        batch = test_features[i:i+batch_size]
-        batch_predictions = predictor.predict(batch)
-        predictions.extend(batch_predictions)
-    
-    predictions = np.array(predictions)
-    
-    # Calculate metrics
-    from sklearn.metrics import (
-        accuracy_score, precision_score, recall_score,
-        f1_score, roc_auc_score, confusion_matrix
-    )
-    
-    # Convert probabilities to binary predictions
-    binary_predictions = (predictions > 0.5).astype(int)
-    
-    metrics = {
-        'accuracy': float(accuracy_score(test_labels, binary_predictions)),
-        'precision': float(precision_score(test_labels, binary_predictions)),
-        'recall': float(recall_score(test_labels, binary_predictions)),
-        'f1_score': float(f1_score(test_labels, binary_predictions)),
-        'roc_auc': float(roc_auc_score(test_labels, predictions)),
-        'confusion_matrix': confusion_matrix(test_labels, binary_predictions).tolist()
+    return {
+        'training_job_name': training_job_name,
+        'model_artifact': xgb_estimator.model_data,
+        'model_output_path': output_path,
+        'hyperparameters': hyperparameters,
+        'metrics': metrics,
+        'estimator': xgb_estimator
     }
-    
-    print("\nModel Evaluation Metrics:")
-    print(f"Accuracy: {metrics['accuracy']:.4f}")
-    print(f"Precision: {metrics['precision']:.4f}")
-    print(f"Recall: {metrics['recall']:.4f}")
-    print(f"F1 Score: {metrics['f1_score']:.4f}")
-    print(f"ROC AUC: {metrics['roc_auc']:.4f}")
-    print(f"\nConfusion Matrix:")
-    print(metrics['confusion_matrix'])
-    
-    # Clean up
-    os.remove(test_file)
-    predictor.delete_endpoint()
-    
-    return metrics
 
 
-def save_model_info(
-    estimator: sagemaker.estimator.Estimator,
-    metrics: Dict[str, Any],
-    feature_columns: list,
-    output_path: str
-):
-    """
-    Save model information to JSON file
-    
-    Args:
-        estimator: Trained SageMaker estimator
-        metrics: Evaluation metrics
-        feature_columns: List of feature column names
-        output_path: Path to save model info
-    """
-    model_info = {
-        'model_name': MODEL_NAME,
-        'training_job_name': estimator.latest_training_job.name,
-        'model_artifact': estimator.model_data,
-        'hyperparameters': HYPERPARAMETERS,
-        'features': feature_columns,
-        'num_features': len(feature_columns),
-        'evaluation_metrics': metrics,
-        'created_at': datetime.now().isoformat(),
-        'instance_type': INSTANCE_TYPE,
-    }
-    
-    with open(output_path, 'w') as f:
-        json.dump(model_info, f, indent=2)
-    
-    print(f"\nModel info saved to {output_path}")
+def get_stack_outputs(stack_name: str) -> Dict[str, str]:
+    """Get CloudFormation stack outputs"""
+    cf_client = boto3.client('cloudformation')
+    try:
+        response = cf_client.describe_stacks(StackName=stack_name)
+        outputs = {}
+        for output in response['Stacks'][0].get('Outputs', []):
+            outputs[output['OutputKey']] = output['OutputValue']
+        return outputs
+    except Exception as e:
+        print(f"  ⚠️  Warning: Could not get stack outputs: {e}")
+        return {}
 
 
 def main():
-    """Main function"""
-    import argparse
+    """Main CLI entry point"""
+    parser = argparse.ArgumentParser(
+        description='Train baseline XGBoost model with SageMaker'
+    )
     
-    parser = argparse.ArgumentParser(description='Train XGBoost model on SageMaker')
-    parser.add_argument('--train-data', type=str, required=True, help='Path to training CSV file')
-    parser.add_argument('--val-data', type=str, required=True, help='Path to validation CSV file')
-    parser.add_argument('--test-data', type=str, required=True, help='Path to test CSV file')
-    parser.add_argument('--s3-bucket', type=str, default=BUCKET_NAME, help='S3 bucket name')
-    parser.add_argument('--s3-prefix', type=str, default=PREFIX, help='S3 prefix for training data')
-    parser.add_argument('--instance-type', type=str, default=INSTANCE_TYPE, help='SageMaker instance type')
-    parser.add_argument('--no-eval', action='store_true', help='Skip model evaluation')
+    parser.add_argument('--s3-bucket', type=str, default=None,
+                       help='S3 bucket name (or use S3_BUCKET env var)')
+    parser.add_argument('--s3-prefix', type=str,
+                       default='fraud-detection/training/processed/',
+                       help='S3 prefix for training data')
+    parser.add_argument('--sagemaker-role-arn', type=str, default=None,
+                       help='SageMaker execution role ARN (or use SAGEMAKER_ROLE_ARN env var)')
+    parser.add_argument('--stack-name', type=str, default=None,
+                       help='CloudFormation stack name (auto-detects resources)')
+    parser.add_argument('--instance-type', type=str, default='ml.m5.xlarge',
+                       help='SageMaker training instance type')
+    parser.add_argument('--output-path', type=str, default=None,
+                       help='S3 path for model artifacts')
+    parser.add_argument('--job-name', type=str, default=None,
+                       help='Training job name')
+    parser.add_argument('--no-wait', action='store_true',
+                       help='Do not wait for training to complete')
     
     args = parser.parse_args()
     
-    print("=" * 60)
-    print("XGBoost Model Training on SageMaker")
-    print("=" * 60)
+    # Get parameters
+    s3_bucket = args.s3_bucket or os.getenv('S3_BUCKET')
+    sagemaker_role_arn = args.sagemaker_role_arn or os.getenv('SAGEMAKER_ROLE_ARN')
     
-    # Prepare data
-    data_paths = prepare_data_for_sagemaker(
-        args.train_data,
-        args.val_data,
-        args.test_data,
-        args.s3_bucket,
-        args.s3_prefix
-    )
+    if args.stack_name:
+        stack_outputs = get_stack_outputs(args.stack_name)
+        if not s3_bucket:
+            s3_bucket = stack_outputs.get('DataBucketName')
+        if not sagemaker_role_arn:
+            account_id = boto3.client('sts').get_caller_identity()['Account']
+            sagemaker_role_arn = f"arn:aws:iam::{account_id}:role/{args.stack_name}-sagemaker-execution-role"
     
-    # Train model
-    estimator = train_xgboost_model(
-        data_paths['train'],
-        data_paths['val'],
-        args.s3_bucket,
-        args.s3_prefix,
-        HYPERPARAMETERS,
-        args.instance_type,
-        INSTANCE_COUNT
-    )
+    if not s3_bucket:
+        parser.error("S3 bucket is required")
+    if not sagemaker_role_arn:
+        parser.error("SageMaker role ARN is required")
     
-    # Evaluate model
-    if not args.no_eval:
-        metrics = evaluate_model(
-            estimator,
-            data_paths['test'],
-            data_paths['feature_columns']
+    try:
+        results = train_baseline_model(
+            s3_bucket=s3_bucket,
+            s3_prefix=args.s3_prefix,
+            sagemaker_role_arn=sagemaker_role_arn,
+            instance_type=args.instance_type,
+            output_path=args.output_path,
+            job_name=args.job_name,
+            wait=not args.no_wait
         )
         
-        # Save model info
-        save_model_info(
-            estimator,
-            metrics,
-            data_paths['feature_columns'],
-            'model_info.json'
-        )
-    
-    print("\n" + "=" * 60)
-    print("Training Complete!")
-    print("=" * 60)
-    print(f"Model artifact: {estimator.model_data}")
-    print(f"Training job: {estimator.latest_training_job.name}")
-    print("\nTo deploy the model, use:")
-    print(f"  predictor = estimator.deploy(instance_type='ml.t2.medium', initial_instance_count=1)")
+        print("\n✅ Training job started successfully!")
+        print(f"\nTo monitor: aws sagemaker describe-training-job --training-job-name {results['training_job_name']}")
+        sys.exit(0)
+    except Exception as e:
+        print(f"\n❌ Error: {e}", file=sys.stderr)
+        import traceback
+        traceback.print_exc()
+        sys.exit(1)
 
 
 if __name__ == '__main__':
     main()
-
